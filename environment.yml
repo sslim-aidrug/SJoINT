@@ -8,8 +8,6 @@
 # Create:   mamba env create -f environment.yml
 # Update:   mamba env update -f environment.yml --prune
 # Verify:   python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_arch_list())"
-#
-# A fully-pinned snapshot for exact reproduction lives in environment-lock.yml.
 
 name: sj
 

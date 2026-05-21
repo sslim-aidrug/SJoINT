@@ -41,5 +41,6 @@ checkpoints/
 results/
 results_*/
 
-# Large data corpora — download per README
-data/
+# Large data corpora — download per README (but keep data/toy/)
+data/*
+!data/toy/
