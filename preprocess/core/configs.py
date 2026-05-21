@@ -1,0 +1,31 @@
+"""MoleculeNet dataset configurations (CSV layout, label columns, task type)."""
+from __future__ import annotations
+
+DATASET_CONFIGS: dict[str, dict] = {
+    "BBBP": {"file": "BBBP.csv", "smiles_col": "smiles",
+             "label_cols": ["p_np"], "task_type": "classification"},
+    "Tox21": {"file": "Tox21.csv", "smiles_col": "smiles",
+              "label_cols": ["NR-AR", "NR-AR-LBD", "NR-AhR", "NR-Aromatase",
+                             "NR-ER", "NR-ER-LBD", "NR-PPAR-gamma", "SR-ARE",
+                             "SR-ATAD5", "SR-HSE", "SR-MMP", "SR-p53"],
+              "task_type": "classification"},
+    "ToxCast": {"file": "ToxCast.csv", "smiles_col": "smiles",
+                "label_cols": "auto", "task_type": "classification"},
+    "HIV": {"file": "HIV.csv", "smiles_col": "smiles",
+            "label_cols": ["HIV_active"], "task_type": "classification"},
+    "BACE": {"file": "BACE.csv", "smiles_col": "smiles",
+             "orig_smiles_col": "mol",
+             "label_cols": ["Class"], "task_type": "classification"},
+    "ClinTox": {"file": "ClinTox.csv", "smiles_col": "smiles",
+                "label_cols": ["FDA_APPROVED", "CT_TOX"],
+                "task_type": "classification"},
+    "SIDER": {"file": "SIDER.csv", "smiles_col": "smiles",
+              "label_cols": "auto", "task_type": "classification"},
+    "ESOL": {"file": "ESOL.csv", "smiles_col": "smiles",
+             "label_cols": ["measured log solubility in mols per litre"],
+             "task_type": "regression"},
+    "FreeSolv": {"file": "FreeSolv.csv", "smiles_col": "smiles",
+                 "label_cols": ["expt"], "task_type": "regression"},
+    "Lipophilicity": {"file": "Lipophilicity.csv", "smiles_col": "smiles",
+                      "label_cols": ["exp"], "task_type": "regression"},
+}

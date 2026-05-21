@@ -1,0 +1,78 @@
+"""Best hyperparameters per dataset (from combined search, proj32 checkpoint)."""
+
+BEST_HP = {
+    # ── Classification (metric: ROC-AUC ↑) ──────────────────────────
+    "BACE": {
+        "stage1_epochs": 50,
+        "learning_rate": 0.005,
+        "weight_decay": 1e-5,
+        "batch_size": 64,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.0,
+    },
+    "BBBP": {
+        "stage1_epochs": 20,
+        "learning_rate": 0.01,
+        "weight_decay": 1e-5,
+        "batch_size": 32,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.2,
+    },
+    "ClinTox": {
+        "stage1_epochs": 10,
+        "learning_rate": 0.005,
+        "weight_decay": 1e-5,
+        "batch_size": 32,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.1,
+    },
+    "Tox21": {
+        "stage1_epochs": 10,
+        "learning_rate": 0.01,
+        "weight_decay": 1e-4,
+        "batch_size": 32,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.2,
+    },
+    "ToxCast": {
+        "stage1_epochs": 15,
+        "learning_rate": 0.01,
+        "weight_decay": 5e-5,
+        "batch_size": 32,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.2,
+    },
+    # ── Regression (metric: RMSE ↓) ─────────────────────────────────
+    "ESOL": {
+        "stage1_epochs": 15,
+        "learning_rate": 0.01,
+        "weight_decay": 5e-5,
+        "batch_size": 32,
+        "num_head_layers": 2,
+        "head_hidden": 128,
+        "head_dropout": 0.2,
+    },
+    "FreeSolv": {
+        "stage1_epochs": 50,
+        "learning_rate": 0.01,
+        "weight_decay": 5e-5,
+        "batch_size": 32,
+        "num_head_layers": 2,
+        "head_hidden": 32,
+        "head_dropout": 0.2,
+    },
+    "Lipophilicity": {
+        "stage1_epochs": 20,
+        "learning_rate": 0.01,
+        "weight_decay": 1e-5,
+        "batch_size": 32,
+        "num_head_layers": 3,
+        "head_hidden": 128,
+        "head_dropout": 0.1,
+    },
+}

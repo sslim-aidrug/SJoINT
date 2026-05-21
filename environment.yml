@@ -1,0 +1,27 @@
+# SJoINT environment
+#
+# Reproduces the verified setup:
+#   PyTorch 2.10 (CUDA 13) + PyG 2.7 + RDKit + SciPy/sklearn on Python 3.11
+# Tested on NVIDIA B200 (sm_100). The "build=cuda*" selector forces a CUDA
+# build; on a CPU-only host, drop that constraint.
+#
+# Create:   mamba env create -f environment.yml
+# Update:   mamba env update -f environment.yml --prune
+# Verify:   python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_arch_list())"
+#
+# A fully-pinned snapshot for exact reproduction lives in environment-lock.yml.
+
+name: sj
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+  - pytorch>=2.7=cuda*
+  - pytorch_geometric>=2.7
+  - rdkit
+  - numpy
+  - scipy
+  - scikit-learn
+  - tqdm
