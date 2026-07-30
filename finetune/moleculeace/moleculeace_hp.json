@@ -1,0 +1,422 @@
+{
+  "CHEMBL1862_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 4,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.001_wd1e-05_bs32_L4_h32_d0.0",
+    "epoch_budget": 48,
+    "cv_rmse": 0.7704
+  },
+  "CHEMBL1871_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 128,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd1e-05_bs128_L3_h64_d0.0",
+    "epoch_budget": 32,
+    "cv_rmse": 0.6563
+  },
+  "CHEMBL2034_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 21,
+    "cv_rmse": 0.6885
+  },
+  "CHEMBL2047_EC50": {
+    "hp": {
+      "learning_rate": 0.005,
+      "weight_decay": 0.0001,
+      "batch_size": 64,
+      "num_head_layers": 2,
+      "head_hidden": 128,
+      "head_dropout": 0.1,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.005_wd0.0001_bs64_L2_h128_d0.1",
+    "epoch_budget": 43,
+    "cv_rmse": 0.6547
+  },
+  "CHEMBL204_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 41,
+    "cv_rmse": 0.7916
+  },
+  "CHEMBL2147_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 30,
+    "cv_rmse": 0.7367
+  },
+  "CHEMBL214_Ki": {
+    "hp": {
+      "learning_rate": 0.0005,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 64,
+      "head_dropout": 0.1,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.0005_wd1e-05_bs32_L1_h64_d0.1",
+    "epoch_budget": 49,
+    "cv_rmse": 0.6853
+  },
+  "CHEMBL218_EC50": {
+    "hp": {
+      "learning_rate": 0.005,
+      "weight_decay": 1e-05,
+      "batch_size": 128,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.3,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.005_wd1e-05_bs128_L1_h32_d0.3",
+    "epoch_budget": 31,
+    "cv_rmse": 0.7283
+  },
+  "CHEMBL219_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.001_wd1e-05_bs32_L1_h32_d0.0",
+    "epoch_budget": 37,
+    "cv_rmse": 0.7672
+  },
+  "CHEMBL228_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.001_wd1e-05_bs32_L1_h32_d0.0",
+    "epoch_budget": 47,
+    "cv_rmse": 0.7734
+  },
+  "CHEMBL231_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 24,
+    "cv_rmse": 0.6894
+  },
+  "CHEMBL233_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.001_wd1e-05_bs32_L1_h32_d0.0",
+    "epoch_budget": 47,
+    "cv_rmse": 0.7644
+  },
+  "CHEMBL234_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 43,
+    "cv_rmse": 0.7037
+  },
+  "CHEMBL235_EC50": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 37,
+    "cv_rmse": 0.6873
+  },
+  "CHEMBL236_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.001_wd1e-05_bs32_L1_h32_d0.0",
+    "epoch_budget": 46,
+    "cv_rmse": 0.7557
+  },
+  "CHEMBL237_EC50": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 4,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.001_wd1e-05_bs32_L4_h32_d0.0",
+    "epoch_budget": 50,
+    "cv_rmse": 0.8776
+  },
+  "CHEMBL237_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 43,
+    "cv_rmse": 0.7461
+  },
+  "CHEMBL238_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 32,
+    "cv_rmse": 0.6866
+  },
+  "CHEMBL239_EC50": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 25,
+    "cv_rmse": 0.767
+  },
+  "CHEMBL244_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 44,
+    "cv_rmse": 0.8041
+  },
+  "CHEMBL262_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 18,
+    "cv_rmse": 0.8049
+  },
+  "CHEMBL264_Ki": {
+    "hp": {
+      "learning_rate": 0.01,
+      "weight_decay": 0.0001,
+      "batch_size": 128,
+      "num_head_layers": 2,
+      "head_hidden": 64,
+      "head_dropout": 0.1,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.01_wd0.0001_bs128_L2_h64_d0.1",
+    "epoch_budget": 48,
+    "cv_rmse": 0.683
+  },
+  "CHEMBL2835_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 128,
+      "num_head_layers": 3,
+      "head_hidden": 128,
+      "head_dropout": 0.1,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.001_wd1e-05_bs128_L3_h128_d0.1",
+    "epoch_budget": 35,
+    "cv_rmse": 0.4059
+  },
+  "CHEMBL287_Ki": {
+    "hp": {
+      "learning_rate": 0.005,
+      "weight_decay": 0.0001,
+      "batch_size": 64,
+      "num_head_layers": 2,
+      "head_hidden": 128,
+      "head_dropout": 0.1,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.005_wd0.0001_bs64_L2_h128_d0.1",
+    "epoch_budget": 43,
+    "cv_rmse": 0.7471
+  },
+  "CHEMBL2971_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 36,
+    "cv_rmse": 0.7002
+  },
+  "CHEMBL3979_EC50": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 128,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd1e-05_bs128_L3_h64_d0.0",
+    "epoch_budget": 26,
+    "cv_rmse": 0.6833
+  },
+  "CHEMBL4005_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 34,
+    "cv_rmse": 0.6595
+  },
+  "CHEMBL4203_Ki": {
+    "hp": {
+      "learning_rate": 0.01,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 128,
+      "head_dropout": 0.0,
+      "stage1_epochs": 40
+    },
+    "hp_tag": "s1e40_lr0.01_wd0.0001_bs32_L3_h128_d0.0",
+    "epoch_budget": 37,
+    "cv_rmse": 0.7811
+  },
+  "CHEMBL4616_EC50": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 32,
+      "num_head_layers": 3,
+      "head_hidden": 64,
+      "head_dropout": 0.0,
+      "stage1_epochs": 10
+    },
+    "hp_tag": "s1e10_lr0.001_wd0.0001_bs32_L3_h64_d0.0",
+    "epoch_budget": 27,
+    "cv_rmse": 0.7247
+  },
+  "CHEMBL4792_Ki": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 32,
+      "num_head_layers": 1,
+      "head_hidden": 32,
+      "head_dropout": 0.0,
+      "stage1_epochs": 20
+    },
+    "hp_tag": "s1e20_lr0.001_wd1e-05_bs32_L1_h32_d0.0",
+    "epoch_budget": 44,
+    "cv_rmse": 0.6983
+  }
+}

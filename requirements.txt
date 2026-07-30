@@ -1,0 +1,14 @@
+# --- Required ---
+torch==2.8.0
+torch_geometric==2.7.0
+rdkit==2025.9.5
+numpy==2.4.2
+scipy==1.17.0
+scikit-learn==1.8.0
+tqdm==4.67.3
+
+# --- Optional (PyG scatter/sparse accelerators) ---
+# torch_geometric 2.7 runs without these (native fallback); install to match your
+# torch + CUDA build for speed, e.g. torch 2.8.0 + CUDA 12.8:
+#   pip install torch-scatter==2.1.2 torch-sparse==0.6.18 \
+#       -f https://data.pyg.org/whl/torch-2.8.0+cu128.html
