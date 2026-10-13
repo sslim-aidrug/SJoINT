@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper."
+title: "SJoINT: Substructure-Driven Junction Tree for Interpretable Molecular Property Prediction"
+authors:
+  - family-names: "Lee"
+    given-names: "Myungjin"
+    affiliation: "Dongguk University"
+  - family-names: "Lim"
+    given-names: "Sangsoo"
+    affiliation: "Dongguk University"
+    email: "sslim@dgu.ac.kr"
+license: MIT
+repository-code: "https://github.com/sslim-aidrug/SJoINT"
+version: "1.0.0"
+date-released: "2026-10-13"
+keywords:
+  - molecular representation learning
+  - molecular property prediction
+  - graph neural networks
+  - junction tree
+  - cross-attention
+  - contrastive pre-training
+  - interpretability
+  - MoleculeNet
+  - MoleculeACE

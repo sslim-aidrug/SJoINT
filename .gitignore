@@ -1,0 +1,33 @@
+# --- Large / generated artifacts (not tracked) ---
+# Small raw inputs (CSVs, SMILES) and vocab JSON are committed; large tensors and
+# training outputs are ignored. The released pretrained backbone is committed via
+# the explicit exception at the end.
+data/**/processed/
+*.pt
+*.npz
+*.ckpt
+*.log
+runs/
+logs/
+results/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# --- Env / editor ---
+.venv/
+env/
+.vscode/
+.idea/
+.DS_Store
+
+# --- Released pretrained backbone (committed) ---
+# Ignore training checkpoints, but keep the distributed backbone.
+checkpoints/*
+!checkpoints/SJoINT_zinc250k_pretrained.pt
+finetune/moleculeace/hp_cv/
+finetune/moleculeace/**/_scratch/
