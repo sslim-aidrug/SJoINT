@@ -1,0 +1,16 @@
+data/**/processed/
+*.pt
+*.npz
+*.ckpt
+*.log
+results/
+hp_search_results/
+hp_cv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+checkpoints/*
+!checkpoints/SJoINT_zinc250k_pretrained.pt

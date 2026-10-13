@@ -1,0 +1,14 @@
+{
+  "default": {
+    "hp": {
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "batch_size": 64,
+      "num_head_layers": 2,
+      "head_hidden": 128,
+      "head_dropout": 0.1,
+      "stage1_epochs": 30
+    },
+    "hp_tag": "s1e30_lr0.001_wd0.0001_bs64_L2_h128_d0.1"
+  }
+}
