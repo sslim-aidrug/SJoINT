@@ -43,7 +43,7 @@ def main():
     ap.add_argument("--cv_seed", type=int, default=42)
     ap.add_argument("--data_base", default=DEFAULT_DATA_BASE)
     ap.add_argument("--pretrain_ckpt", default=DEFAULT_PRETRAIN_CKPT)
-    ap.add_argument("--hp_json", default=DEFAULT_HP_JSON, help="per-task HP (from the CV search)")
+    ap.add_argument("--hp_json", default=DEFAULT_HP_JSON, help="HP table: per-task entries (from the CV search) and a 'default' entry")
     ap.add_argument("--max_epochs", type=int, default=100)
     ap.add_argument("--es_patience", type=int, default=10)
     ap.add_argument("--results_base", default=DEFAULT_RESULTS_BASE)
@@ -54,9 +54,7 @@ def main():
 
     with open(args.hp_json) as f:
         hp_table = json.load(f)
-    if args.task not in hp_table:
-        raise KeyError(f"{args.task} not in {args.hp_json}")
-    entry = hp_table[args.task]
+    entry = hp_table[args.task] if args.task in hp_table else hp_table["default"]
     hp = entry["hp"]
 
     output_dir = os.path.join(args.results_base, args.task, f"fold{args.fold}")
@@ -87,7 +85,7 @@ def main():
     logger.info(f"  HP {entry.get('hp_tag')}")
     logger.info("=" * 60)
 
-    template = BackboneTemplate(args.pretrain_ckpt, jt_vocab_size=1753,
+    template = BackboneTemplate(args.pretrain_ckpt, jt_vocab_size=1750,
                                num_ca_blocks=3, jt_feature_dim=jt_dim)
     ctx = make_ctx(task_type, num_tasks, template, device, logger)
 

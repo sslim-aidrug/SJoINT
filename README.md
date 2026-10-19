@@ -25,7 +25,7 @@ SJoINT/
 ├── requirements.txt
 ├── images/                  # overview figure
 ├── checkpoints/             # released pre-trained backbone
-├── data/                    # raw + processed data (git-ignored; see data/README.md)
+├── data/                    # raw inputs + vocabulary (processed tensors git-ignored; see data/README.md)
 ├── preprocess/              # raw SMILES/CSV → .pt tensors
 │   ├── core/                #   shared featuriser & I/O
 │   ├── pretrain/            #   vocab builder + ZINC250K tensorizer
@@ -55,29 +55,40 @@ pip install torch-scatter==2.1.2 torch-sparse==0.6.18 \
 
 ## Workflow
 
-The included `data/` ships the **raw** inputs (SMILES, MoleculeNet CSVs) and the JT
-vocabulary. The large **processed tensors** are *not* committed — build them locally
-with the preprocessing step below (see also `data/README.md`).
+The included `data/` ships the **raw** inputs (SMILES, MoleculeNet and MoleculeACE
+CSVs) and the JT vocabulary used by the released backbone. The large **processed
+tensors** are *not* committed — build them locally with the preprocessing step
+below (see also `data/README.md`).
+
+Two routes are supported:
+
+- **Released backbone** — use `data/vocab/vocab_zinc.json` and
+  `checkpoints/SJoINT_zinc250k_pretrained.pt`; skip step 2.
+- **New backbone** — build a new JT vocabulary, tensorize everything with it, and
+  pre-train (step 2). Vocabulary ids index the backbone's substructure embeddings,
+  so a backbone must always be used with the vocabulary it was pre-trained with.
 
 ### 1. Preprocess
-Build the JT vocabulary and tensorize (see `preprocess/README.md`):
+See `preprocess/README.md` for all options.
 ```bash
-# JT substructure vocabulary from the pre-training corpus
-python -m preprocess.pretrain.build_vocab --input data/raw/zinc250k.txt \
-    --output data/vocab/vocab_zinc.json
-# SMILES → .pt chunks
-python -m preprocess.pretrain.tensorize --input data/raw/zinc250k.txt \
-    --output data/processed/zinc250k/data --vocab data/vocab/vocab_zinc.json
+# Released vocabulary
+bash preprocess/run.sh pretrain                     # ZINC250K → .pt chunks
+bash preprocess/run.sh moleculenet                  # MoleculeNet random split (seed 42)
+MODE=scaffold bash preprocess/run.sh moleculenet    # MoleculeNet scaffold split
+bash preprocess/run.sh moleculeace                  # MoleculeACE fixed splits
+
+# New vocabulary: set VOCAB_PATH to a new file (built on the first call)
+export VOCAB_PATH=data/vocab/vocab_new.json
+bash preprocess/run.sh pretrain
+bash preprocess/run.sh moleculenet                  # ... and the other datasets
 ```
-The **MoleculeACE** activity-cliff benchmark is also supported — tensorize its
-pre-split CSVs with `bash preprocess/run.sh moleculeace` (or `python -m
-preprocess.moleculeace.tensorize ...`).
 
 ### 2. Pre-train the backbone
 ```bash
 python pretrain/train.py \
-    --data_path data/processed/zinc250k --checkpoint_dir checkpoints/backbone \
-    --learning_rate 1e-4 --temperature 0.10 --batch_size 256 --weight_decay 5e-5 \
+    --data_path data/processed/zinc250k --vocab_path data/vocab/vocab_new.json \
+    --checkpoint_dir checkpoints/backbone \
+    --learning_rate 1e-4 --temperature 0.07 --batch_size 256 --weight_decay 5e-5 \
     --warmup_epochs 10 --max_epochs 100 --num_workers 4 --seed 42
 ```
 The model architecture is fixed to the released backbone (defined by `SJoINTModel`
@@ -85,14 +96,15 @@ defaults in `pretrain/model.py`); only training hyper-parameters are on the CLI.
 Produces `checkpoints/backbone/best_model.ckpt`, selected by held-out contrastive
 loss. Training is seeded for reproducibility.
 
-A ready-to-use pre-trained backbone is included: **`SJoINT_zinc250k_pretrained.pt`**
-(ZINC250K, `jt_use_edge_attr + jt_use_jk`, lr 1e-4). Load it directly to skip
-pre-training.
+A ready-to-use pre-trained backbone is included:
+**`checkpoints/SJoINT_zinc250k_pretrained.pt`** (ZINC250K, used with
+`data/vocab/vocab_zinc.json`). Load it directly to skip pre-training.
 
 ### 3. Fine-tune
 **MoleculeNet** — two-stage downstream prediction (head warm-up → end-to-end
 fine-tune; best epoch by validation loss):
 ```bash
+python finetune/moleculenet/hp_search.py --dataset BBBP    # optional: per-dataset HP by validation loss
 python finetune/moleculenet/train.py --dataset BBBP --seed 42 \
     --pretrain_ckpt checkpoints/SJoINT_zinc250k_pretrained.pt
 ```
@@ -109,7 +121,8 @@ python finetune/moleculeace/train.py     --task CHEMBL204_Ki --fold 0    # one f
 python finetune/moleculeace/aggregate.py                                 # average over the fold models
 ```
 See `finetune/README.md` for the schedules, hyper-parameters, and outputs.
-`--pretrain_ckpt` defaults to the released backbone.
+`--pretrain_ckpt` defaults to the released backbone; pass
+`checkpoints/backbone/best_model.ckpt` to fine-tune a newly pre-trained one.
 
 ## Data & citations
 

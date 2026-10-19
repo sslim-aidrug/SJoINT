@@ -22,8 +22,9 @@ sys.path.insert(0, _FINETUNE_DIR)
 from dataset import FinetuneDataset, collate_fn                       # noqa: E402
 from engine import (                                                  # noqa: E402
     seed_everything, _seed_worker, run_two_stage, build_model,
-    normalize_regression, infer_jt_feature_dim, setup_logger,
+    normalize_regression, infer_jt_feature_dim, setup_logger, to_original_scale,
 )
+from configs import DEFAULT_HP                                        # noqa: E402
 
 _PROJECT_ROOT = os.path.dirname(_FINETUNE_DIR)
 DEFAULT_DATA_BASE = os.path.join(_PROJECT_ROOT, "data", "processed", "moleculenet", "random_split")
@@ -35,27 +36,27 @@ DEFAULT_PRETRAIN_CKPT = os.path.join(_PROJECT_ROOT, "checkpoints", "SJoINT_zinc2
 class Config:
     # Dataset selection (one random/scaffold split per seed)
     dataset: str = "BBBP"
-    seed: int = 1
+    seed: int = 42
 
     # Backbone (architecture auto-detected from the checkpoint)
     num_ca_blocks: int = 3
-    jt_vocab_size: int = 1753
+    jt_vocab_size: int = 1750
     pretrain_ckpt: str = ""
 
     # Prediction head
-    head_hidden: int = 32
-    head_dropout: float = 0.1
-    num_head_layers: int = 2
+    head_hidden: int = DEFAULT_HP["head_hidden"]
+    head_dropout: float = DEFAULT_HP["head_dropout"]
+    num_head_layers: int = DEFAULT_HP["num_head_layers"]
     head_activation: str = "relu"
     head_norm: str = "layer"
 
     # Two-stage schedule (max_epochs / patience are fixed protocol)
-    learning_rate: float = 1e-3
+    learning_rate: float = DEFAULT_HP["learning_rate"]
     backbone_lr_ratio: float = 0.1
-    weight_decay: float = 1e-4
-    batch_size: int = 64
+    weight_decay: float = DEFAULT_HP["weight_decay"]
+    batch_size: int = DEFAULT_HP["batch_size"]
     max_epochs: int = 100
-    stage1_epochs: int = 30
+    stage1_epochs: int = DEFAULT_HP["stage1_epochs"]
     early_stop_patience: int = 20   # 0 = disabled
     grad_clip: float = 1.0
     use_amp: bool = True
@@ -157,7 +158,8 @@ def main():
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(out, f, indent=2)
     np.savez(os.path.join(args.output_dir, "test_preds.npz"),
-             preds=results["test_preds"], labels=results["test_labels"])
+             preds=to_original_scale(results["test_preds"], label_stats),
+             labels=to_original_scale(results["test_labels"], label_stats))
     logger.info(f"Results saved to {args.output_dir}")
 
 

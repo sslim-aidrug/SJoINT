@@ -11,8 +11,6 @@ DATASET_CONFIGS: dict[str, dict] = {
               "task_type": "classification"},
     "ToxCast": {"file": "ToxCast.csv", "smiles_col": "smiles",
                 "label_cols": "auto", "task_type": "classification"},
-    "HIV": {"file": "HIV.csv", "smiles_col": "smiles",
-            "label_cols": ["HIV_active"], "task_type": "classification"},
     "BACE": {"file": "BACE.csv", "smiles_col": "smiles",
              "orig_smiles_col": "mol",
              "label_cols": ["Class"], "task_type": "classification"},

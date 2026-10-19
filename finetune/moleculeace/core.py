@@ -32,7 +32,7 @@ from dataset import (                                                 # noqa: E4
 )
 from model import DownstreamModel, freeze_backbone                    # noqa: E402
 from engine import (                                                  # noqa: E402
-    _seed_worker, run_two_stage, rmse_cliff, infer_jt_feature_dim,
+    _seed_worker, run_two_stage, rmse_cliff, infer_jt_feature_dim, to_original_scale,
 )
 from model import load_pretrained_backbone, create_random_backbone    # noqa: E402
 
@@ -83,10 +83,10 @@ class BackboneTemplate:
     """Loads the pretrained backbone once; hands out fresh CPU copies so each
     run starts from the same pretrained weights without re-reading the file."""
 
-    def __init__(self, pretrain_ckpt, jt_vocab_size=1753, num_ca_blocks=3,
+    def __init__(self, pretrain_ckpt, jt_vocab_size=1750, num_ca_blocks=3,
                  jt_feature_dim=61):
         self.pretrain_ckpt = pretrain_ckpt
-        if pretrain_ckpt and os.path.exists(pretrain_ckpt):
+        if pretrain_ckpt != "none":
             bb = load_pretrained_backbone(pretrain_ckpt, "cpu",
                                           jt_vocab_size=jt_vocab_size,
                                           num_ca_blocks=num_ca_blocks)
@@ -186,6 +186,9 @@ def train_eval(train_sub, eval_sub, hp, ctx, *, max_epochs, early_stop_patience,
         if rc is not None:
             results["test"]["rmse_cliff"] = rc
             results["test"]["n_cliff"] = n
+    if task_type == "regression":
+        results["test_preds"] = to_original_scale(results["test_preds"], label_stats)
+        results["test_labels"] = to_original_scale(results["test_labels"], label_stats)
     del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

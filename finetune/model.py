@@ -96,7 +96,7 @@ def _detect_num_ca_blocks(state_dict):
     return (max(idxs) + 1) if idxs else 0
 
 
-def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1753, num_ca_blocks=3):
+def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1750, num_ca_blocks=3):
     """Load a pretrained SJoINTModel from a checkpoint, reconstructing its
     architecture from the state_dict."""
     SJoINTModel = _load_sjoint_class()
@@ -137,7 +137,7 @@ def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1753, num_ca_b
     return backbone
 
 
-def create_random_backbone(jt_vocab_size=1753, num_ca_blocks=3, device="cpu",
+def create_random_backbone(jt_vocab_size=1750, num_ca_blocks=3, device="cpu",
                            jt_feature_dim=61):
     """Create a randomly initialised SJoINTModel (no-pretrain baseline)."""
     SJoINTModel = _load_sjoint_class()

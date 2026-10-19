@@ -69,7 +69,7 @@ class MolEncoder(nn.Module):
                     hidden_dim, hidden_dim // num_heads, heads=num_heads,
                     edge_dim=hidden_dim, concat=True))
             elif gnn_type == "gine":
-                # GINEConv: edge feature 지원 GIN. MLP(2L) is the standard GINE choice.
+                # GINEConv: GIN with edge features. MLP(2L) is the standard GINE choice.
                 mlp = nn.Sequential(
                     nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
                     nn.Linear(hidden_dim, hidden_dim))
@@ -120,7 +120,7 @@ class JTEncoder(nn.Module):
     Output: node embeddings (N, hidden_dim)
     """
 
-    def __init__(self, vocab_size=1753, feature_dim=61, hidden_dim=64,
+    def __init__(self, vocab_size=1750, feature_dim=61, hidden_dim=64,
                  num_layers=2, num_heads=8, dropout=0.1, use_jk=False,
                  gnn_type="gatv2", use_edge_attr=False, edge_feature_dim=55):
         super().__init__()
@@ -150,7 +150,7 @@ class JTEncoder(nn.Module):
                 mlp = nn.Sequential(
                     nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
                     nn.Linear(hidden_dim, hidden_dim))
-                # JT edges have no edge_attr → use plain GINConv (no edge_dim)
+                # without JT edge_attr → plain GINConv (no edge_dim)
                 if use_edge_attr:
                     self.convs.append(GINEConv(mlp, train_eps=True, edge_dim=edge_feature_dim))
                 else:
@@ -283,7 +283,7 @@ class SJoINTModel(nn.Module):
         6. Projection Head: (B, H) → (B, proj_dim) for NT-Xent contrastive loss
     """
 
-    def __init__(self, jt_vocab_size=1753, jt_feature_dim=61,
+    def __init__(self, jt_vocab_size=1750, jt_feature_dim=61,
                  num_ca_blocks=3, proj_dim=32,
                  hidden_dim=128, mol_num_layers=3, jt_num_layers=3,
                  num_heads=8, dropout=0.0, ca_dropout=0.1, ffn_ratio=4,

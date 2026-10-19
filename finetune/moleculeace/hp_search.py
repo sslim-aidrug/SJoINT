@@ -38,16 +38,7 @@ _PROJECT_ROOT = os.path.dirname(_FINETUNE_DIR)
 DEFAULT_DATA_BASE = os.path.join(_PROJECT_ROOT, "data", "processed", "moleculeace")
 DEFAULT_PRETRAIN_CKPT = os.path.join(_PROJECT_ROOT, "checkpoints", "SJoINT_zinc250k_pretrained.pt")
 
-# HP search space (same grid used across the benchmark).
-_SPACE = dict(
-    learning_rate=[5e-4, 1e-3, 5e-3, 1e-2],
-    weight_decay=[1e-5, 1e-4],
-    batch_size=[32, 64, 128],
-    num_head_layers=[1, 2, 3, 4],
-    head_hidden=[32, 64, 128],
-    head_dropout=[0.0, 0.1, 0.2, 0.3],
-    stage1_epochs=[10, 20, 30, 40, 50],
-)
+from moleculenet.configs import SEARCH_SPACE as _SPACE                # noqa: E402  (shared grid)
 
 
 def hp_tag(hp):
@@ -99,7 +90,7 @@ def main():
     train, _test, _cliff, meta = load_task(data_dir)
     task_type, num_tasks = meta["task_type"], meta["num_tasks"]
     jt_dim = infer_jt_feature_dim(train)
-    template = BackboneTemplate(args.pretrain_ckpt, jt_vocab_size=1753,
+    template = BackboneTemplate(args.pretrain_ckpt, jt_vocab_size=1750,
                                num_ca_blocks=3, jt_feature_dim=jt_dim)
     logger = quiet_logger()
     ctx = make_ctx(task_type, num_tasks, template, device, logger)

@@ -118,8 +118,8 @@ def build_cross_attn_mask(b_idx, r_idx, c_idx, B, max_q, max_k, pad_mask_k):
     """Build a (B, 1, max_q, max_k) additive attention mask from flat indices.
 
     Entries listed in (b_idx, r_idx, c_idx) become 0; everything else -inf.
-    Rows that end up entirely -inf (padded keys only) are reset to 0 to
-    avoid NaN in softmax.
+    Rows with no member key (padded query positions) are reset to 0 to avoid
+    NaN in softmax; every real atom belongs to at least one JT node.
     """
     device = pad_mask_k.device
     mask = torch.full((B, 1, max_q, max_k), float("-inf"), device=device)

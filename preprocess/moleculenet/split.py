@@ -4,7 +4,7 @@ Usage:
     python -m preprocess.moleculenet.split \\
         --mode scaffold --csv_dir data/raw/moleculenet \\
         --out_dir data/processed/moleculenet/scaffold_split \\
-        --seeds 1 2 3 42 43 44 123 456 789 1024
+        --seeds 42
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ RDLogger.DisableLog("rdApp.*")
 
 TRAIN_RATIO = 0.8
 VAL_RATIO = 0.1
-DEFAULT_SEEDS = [1, 2, 3, 42, 43, 44, 123, 456, 789, 1024]
+DEFAULT_SEEDS = [42]
 
 
 def load_csv(dataset_name, csv_dir):

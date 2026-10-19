@@ -1,8 +1,8 @@
 """Consolidate the per-task CV search results into one HP table.
 
-Reads `<hp_cv>/<task>_hp.json` (written by hp_search.py) and writes
-`moleculeace_hp.json` = {task: {hp, hp_tag, cv_rmse}}, consumed by `train.py`
-for the per-fold evaluation runs.
+Reads `<hp_cv>/<task>_hp.json` (written by hp_search.py) and adds the selected
+{task: {hp, hp_tag, cv_rmse}} entries to `moleculeace_hp.json`, consumed by
+`train.py` for the per-fold evaluation runs (tasks without an entry use `default`).
 
     python finetune/moleculeace/select_hp.py
 """
@@ -17,7 +17,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 def main():
     hp_cv = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_HERE, "hp_cv")
     out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(_HERE, "moleculeace_hp.json")
-    table = {}
+    table = json.load(open(out_path)) if os.path.exists(out_path) else {}
     for f in sorted(glob.glob(os.path.join(hp_cv, "*_hp.json"))):
         d = json.load(open(f))
         sel = d["selected"]

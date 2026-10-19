@@ -2,11 +2,9 @@
 # SJoINT preprocessing — unified entry point.
 #
 # Usage:
-#   bash preprocess/run.sh pretrain      # Build JT vocab + tensorize ZINC250K
+#   bash preprocess/run.sh pretrain      # Tensorize ZINC250K (builds the JT vocab if VOCAB_PATH is missing)
 #   bash preprocess/run.sh moleculenet   # Split MoleculeNet CSVs + tensorize
 #   bash preprocess/run.sh moleculeace   # Tensorize MoleculeACE (pre-split CSVs)
-#
-# `finetune` is kept as an alias for `moleculenet` for backward compatibility.
 set -e
 
 PYTHON="${PYTHON:-python}"
@@ -40,11 +38,11 @@ case "${1:-}" in
         --chunk_size "$CHUNK_SIZE"
     ;;
 
-  moleculenet|finetune)
+  moleculenet)
     MODE="${MODE:-random}"
     CSV_DIR="${CSV_DIR:-data/raw/moleculenet}"
     VOCAB_PATH="${VOCAB_PATH:-data/vocab/vocab_zinc.json}"
-    SEEDS="${SEEDS:-1 2 3 42 43 44 123 456 789 1024}"
+    SEEDS="${SEEDS:-42}"
 
     if [ "$MODE" = "both" ]; then
         OUT_DIR="${OUT_DIR:-data/processed/moleculenet/split}"
@@ -95,8 +93,8 @@ case "${1:-}" in
   *)
     echo "Usage: bash preprocess/run.sh {pretrain|moleculenet|moleculeace}"
     echo ""
-    echo "  pretrain     Build JT vocab + tensorize ZINC250K"
-    echo "  moleculenet  Split MoleculeNet CSVs + tensorize  (alias: finetune)"
+    echo "  pretrain     Tensorize ZINC250K (builds the JT vocab if VOCAB_PATH is missing)"
+    echo "  moleculenet  Split MoleculeNet CSVs + tensorize"
     echo "  moleculeace  Tensorize MoleculeACE (pre-split activity-cliff CSVs)"
     echo ""
     echo "Environment variables:"
@@ -104,9 +102,9 @@ case "${1:-}" in
     echo "  MODE       Split mode          (moleculenet only; default: random; options: random / scaffold / both)"
     echo "  CSV_DIR    Raw CSV directory   (default: data/raw/moleculenet)"
     echo "  OUT_DIR    Output directory    (default depends on MODE)"
-    echo "  SEEDS      Space-separated list of seeds (moleculenet only)"
-    echo "             (default: 1 2 3 42 43 44 123 456 789 1024)"
-    echo "  WORKERS    Parallel workers    (default: 60)"
+    echo "  VOCAB_PATH JT vocabulary       (default: data/vocab/vocab_zinc.json, the released one)"
+    echo "  SEEDS      Space-separated list of seeds (moleculenet only; default: 42)"
+    echo "  WORKERS    Parallel workers    (default: 60 for pretrain, 30 for moleculeace)"
     exit 1
     ;;
 esac

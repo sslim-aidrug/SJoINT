@@ -1,6 +1,6 @@
 """Run the MoleculeACE evaluation over all tasks and folds.
 
-For each task and fold, train with the CV-selected HP (moleculeace_hp.json) on the
+For each task and fold, train with the task's HP (moleculeace_hp.json) on the
 other folds (early stopping on this fold) and evaluate on the fixed test set; the
 fold models are averaged by aggregate.py (original MoleculeACE protocol).
 
@@ -8,7 +8,6 @@ fold models are averaged by aggregate.py (original MoleculeACE protocol).
 """
 import os
 import sys
-import json
 import time
 import subprocess
 
@@ -36,7 +35,7 @@ def launch(task, fold, gpu):
 
 
 def main():
-    tasks = sorted(json.load(open(HP_JSON)).keys())
+    tasks = sorted(t for t in os.listdir(DATA_BASE) if os.path.isdir(os.path.join(DATA_BASE, t)))
     q = [(t, k) for t in tasks for k in range(N_FOLDS)
          if not os.path.exists(os.path.join(RESULTS_BASE, t, f"fold{k}", "results.json"))]
     print(f"[final] {len(q)} runs ({len(tasks)} tasks x {N_FOLDS} folds), "

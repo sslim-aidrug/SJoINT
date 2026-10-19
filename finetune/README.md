@@ -11,15 +11,16 @@ finetune/
 ├── engine.py           shared training primitives (two-stage loop, metrics, model factory)
 ├── moleculenet/        MoleculeNet benchmark
 │   ├── train.py            entry point (per-split random/scaffold, early-stop by val loss)
-│   └── configs.py          per-dataset reference hyper-parameters (DEFAULT_HP)
+│   ├── hp_search.py        hyper-parameter search by validation loss
+│   └── configs.py          search space (SEARCH_SPACE) + representative defaults (DEFAULT_HP)
 └── moleculeace/        MoleculeACE activity-cliff benchmark (van Tilborg 2022 protocol)
     ├── train.py            one fold model (train on 4 folds, early-stop on 1) -> fixed test
     ├── hp_search.py        k-fold CV hyper-parameter search on the training set
-    ├── select_hp.py        consolidate CV results -> moleculeace_hp.json
+    ├── select_hp.py        add the CV-selected HP to moleculeace_hp.json
     ├── core.py             fixed-split loading, k-fold, backbone template
     ├── run_cv_search.py    orchestrate the CV search over all tasks
     ├── run_final.py        orchestrate the fold-model runs over all tasks
-    └── moleculeace_hp.json per-task selected HP + epoch budget
+    └── moleculeace_hp.json HP table (representative `default` entry + per-task entries)
 ```
 
 ## MoleculeNet
@@ -37,11 +38,23 @@ python finetune/moleculenet/train.py --dataset BBBP --seed 42 \
     --data_base data/processed/moleculenet/random_split
 ```
 
-`--pretrain_ckpt` defaults to the released backbone and `--data_base` to the
-random split. For the scaffold split, point `--data_base` at
-`data/processed/moleculenet/scaffold_split`. Per-dataset hyper-parameters are in
-`moleculenet/configs.py` (`DEFAULT_HP[split][dataset]`). Omitting a pretrain
-checkpoint trains a randomly-initialised backbone as a no-pretrain baseline.
+`--pretrain_ckpt` defaults to the released backbone; pass the path of a newly
+pre-trained backbone (e.g. `checkpoints/backbone/best_model.ckpt`) to fine-tune it
+instead, or `none` for a randomly initialised backbone (no-pretrain baseline). The
+downstream tensors must be built with the vocabulary of the backbone being used
+(see `preprocess/README.md`). `--data_base` defaults to the random split; for the
+scaffold split, point it at `data/processed/moleculenet/scaffold_split`.
+Hyper-parameter defaults are the representative values in `moleculenet/configs.py`.
+Per-dataset values are selected by validation loss over `SEARCH_SPACE`: 24 random
+combinations, each trained on three seeds, keeping the lowest mean validation loss
+(test sets are not used):
+
+```bash
+python finetune/moleculenet/hp_search.py --dataset BBBP --seeds 42 43 44 \
+    --data_base data/processed/moleculenet/random_split
+```
+The selected values (`hp_search_results/<dataset>_hp.json`) are then passed to
+`train.py` on the CLI.
 
 ## MoleculeACE
 
@@ -63,7 +76,7 @@ cross-validation, and each fold model is early-stopped on its own held-out fold.
 python finetune/moleculeace/hp_search.py --task CHEMBL204_Ki
 GPUS=0 PER_GPU=8 python finetune/moleculeace/run_cv_search.py
 
-# 2) consolidate the selected HP + epoch budgets
+# 2) add the selected HP to moleculeace_hp.json (tasks without an entry use `default`)
 python finetune/moleculeace/select_hp.py
 
 # 3) fold models (train on 4 folds, early-stop on 1) evaluated on the fixed test set
@@ -76,9 +89,10 @@ python finetune/moleculeace/aggregate.py       # per-task average over the fold 
 
 - **MoleculeNet** — `moleculenet/results/<dataset>/seed<n>/<hp_tag>/`:
   `results.json` (best epoch, val/test loss, test metric — ROC-AUC or RMSE),
-  `test_preds.npz`, `downstream.log`.
+  `test_preds.npz` (original units), `downstream.log`.
 - **MoleculeACE** — `moleculeace/results/<task>/fold<k>/`: `results.json`
-  (RMSE, RMSE_cliff, n_cliff, best epoch, HP), `test_preds.npz`, `downstream.log`.
+  (RMSE, RMSE_cliff, n_cliff, best epoch, HP), `test_preds.npz` (original units),
+  `downstream.log`.
 
 `pool_mode` selects the readout: `both` (concat JT ⊕ MOL, default), `jt_only`,
 or `mol_only`.

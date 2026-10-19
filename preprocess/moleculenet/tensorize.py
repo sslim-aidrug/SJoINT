@@ -4,7 +4,7 @@ Usage:
     python -m preprocess.moleculenet.tensorize \\
         --data_dir data/processed/moleculenet/random_split \\
         --vocab data/vocab/vocab_zinc.json \\
-        --seeds 1 2 3 42 43 44 123 456 789 1024
+        --seeds 42
 """
 from __future__ import annotations
 
@@ -15,11 +15,15 @@ import multiprocessing as mp
 import os
 import re
 import torch
+import torch.multiprocessing
 
 from preprocess.core.configs import DATASET_CONFIGS
 from preprocess.core.utils import load_vocab, process_smiles, to_sample
 
-DEFAULT_SEEDS = [1, 2, 3, 42, 43, 44, 123, 456, 789, 1024]
+# workers return tensors; share them via files so a low open-file limit is not exhausted
+torch.multiprocessing.set_sharing_strategy("file_system")
+
+DEFAULT_SEEDS = [42]
 FEATURE_CACHE = {}
 
 

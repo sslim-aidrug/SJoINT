@@ -10,6 +10,7 @@ data/**/processed/
 runs/
 logs/
 results/
+hp_search_results/
 
 # --- Python ---
 __pycache__/

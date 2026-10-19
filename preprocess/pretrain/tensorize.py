@@ -41,7 +41,7 @@ def build_dataset(smiles_txt, out_path, vocab_path, num_workers, chunk_size):
 
     with mp.Pool(processes=num_workers) as pool:
         pbar = tqdm(
-            pool.imap_unordered(process_smiles, all_smiles, chunksize=512),
+            pool.imap(process_smiles, all_smiles, chunksize=512),
             total=total, desc="Processing", smoothing=0.1,
         )
         for result in pbar:

@@ -96,12 +96,19 @@ def compute_metrics(preds, labels, task_type):
     return {"rmse": float(np.mean(rmses)) if rmses else float("inf")}
 
 
+def to_original_scale(arr, label_stats):
+    """Undo z-score normalization of regression predictions/labels."""
+    if label_stats is None:
+        return arr
+    mean, std = label_stats
+    return arr * std.numpy() + mean.numpy()
+
+
 def _metrics_original_scale(preds, labels, label_stats, task_type):
     """For regression, undo z-score normalization before computing RMSE."""
-    if task_type == "regression" and label_stats is not None:
-        mean, std = label_stats
-        preds = preds * std.numpy() + mean.numpy()
-        labels = labels * std.numpy() + mean.numpy()
+    if task_type == "regression":
+        preds = to_original_scale(preds, label_stats)
+        labels = to_original_scale(labels, label_stats)
     return compute_metrics(preds, labels, task_type)
 
 
@@ -181,7 +188,7 @@ def train_one_epoch(model, loader, optimizer, criterion, scaler,
 def evaluate(model, loader, device, task_type, criterion, label_stats=None,
              return_preds=False):
     model.eval()
-    total_loss, n_batches = 0.0, 0
+    total_loss, n_labels = 0.0, 0                # loss summed over labels, not batches
     all_preds, all_labels = [], []
 
     for batch in loader:
@@ -192,9 +199,10 @@ def evaluate(model, loader, device, task_type, criterion, label_stats=None,
         with autocast(device_type="cuda", enabled=True):
             logits = model(jt_b, mol_b, *masks)
             mask = ~torch.isnan(labels)
-            if mask.sum() > 0:
-                total_loss += criterion(logits[mask], labels[mask]).item()
-                n_batches += 1
+            n = int(mask.sum())
+            if n > 0:
+                total_loss += criterion(logits[mask], labels[mask]).item() * n
+                n_labels += n
 
         all_preds.append(logits.float().cpu().numpy())
         all_labels.append(labels.cpu().numpy())
@@ -202,9 +210,10 @@ def evaluate(model, loader, device, task_type, criterion, label_stats=None,
     preds_cat = np.concatenate(all_preds)
     labels_cat = np.concatenate(all_labels)
     metrics = _metrics_original_scale(preds_cat, labels_cat, label_stats, task_type)
+    loss = total_loss / max(n_labels, 1)        # every labelled sample weighted equally
     if return_preds:
-        return total_loss / max(n_batches, 1), metrics, preds_cat, labels_cat
-    return total_loss / max(n_batches, 1), metrics
+        return loss, metrics, preds_cat, labels_cat
+    return loss, metrics
 
 
 # --------------------------------------------------------------------------- #
@@ -340,8 +349,9 @@ def run_two_stage(model, train_loader, val_loader, test_loader,
 # Model factory / misc
 # --------------------------------------------------------------------------- #
 def build_model(args, task_type, num_tasks, jt_feature_dim, device, logger):
-    """Load (or randomly init) the backbone and attach the prediction head."""
-    if args.pretrain_ckpt and os.path.exists(args.pretrain_ckpt):
+    """Load (or randomly init, with `pretrain_ckpt="none"`) the backbone and
+    attach the prediction head."""
+    if args.pretrain_ckpt != "none":
         pretrained = load_pretrained_backbone(
             args.pretrain_ckpt, device,
             jt_vocab_size=args.jt_vocab_size,

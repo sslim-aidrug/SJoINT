@@ -57,6 +57,7 @@ def process_smiles(smiles: str) -> dict | None:
         if rd_mol is None:
             return None
         canonical = Chem.MolToSmiles(rd_mol, canonical=True, isomericSmiles=True)
+        rd_mol = Chem.MolFromSmiles(canonical)   # atom order follows the stored SMILES
         num_atoms = rd_mol.GetNumAtoms()
 
         jt_nodes, jt_edges = tree_decomp(rd_mol)

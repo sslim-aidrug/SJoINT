@@ -1,7 +1,7 @@
 """Build JT substructure vocabulary from a SMILES corpus.
 
 Output: JSON with vocab_id -> SMILES mapping (0=<PAD>, 1=<UNK>, 2+=substructures)
-        and 10-D fallback feature vectors per entry.
+        and 10-D structural descriptors per entry.
 
 Usage:
     python -m preprocess.pretrain.build_vocab \\
@@ -46,14 +46,16 @@ def build_vocab(input_txt: str, num_workers: int = 60, min_count: int = 1):
 
     counter = Counter()
     feat_sums, feat_counts = {}, {}
+    failed = 0
 
     print(f"\nExtracting JT substructures with {num_workers} workers...")
     with mp.Pool(num_workers) as pool:
         for result in tqdm(
-            pool.imap_unordered(extract_jt, all_smiles, chunksize=1024),
+            pool.imap(extract_jt, all_smiles, chunksize=1024),
             total=total, desc="JT decomp"
         ):
             if result is None:
+                failed += 1
                 continue
             for smi, feat in result:
                 counter[smi] += 1
@@ -64,7 +66,8 @@ def build_vocab(input_txt: str, num_workers: int = 60, min_count: int = 1):
                     feat_sums[smi][i] += feat[i]
                 feat_counts[smi] += 1
 
-    filtered = [(smi, cnt) for smi, cnt in counter.most_common() if cnt >= min_count]
+    filtered = [(smi, cnt) for smi, cnt in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
+                if cnt >= min_count]
     vocab = {"<PAD>": 0, "<UNK>": 1}
     features = {"<PAD>": [0.0] * 10, "<UNK>": [0.0] * 10}
 
@@ -74,13 +77,13 @@ def build_vocab(input_txt: str, num_workers: int = 60, min_count: int = 1):
         features[smi] = [feat_sums[smi][i] / fc for i in range(10)]
 
     print(f"\n{'='*60}")
-    print(f"  Total molecules:      {total:,}")
+    print(f"  Total molecules:      {total:,}  (failed: {failed:,})")
     print(f"  Unique substructures: {len(filtered):,}")
     print(f"  Vocab size:           {len(vocab):,} (incl. <PAD>, <UNK>)")
     print(f"{'='*60}")
 
     return {"vocab": vocab, "features": features,
-            "stats": {"total_molecules": total, "vocab_size": len(vocab)}}
+            "stats": {"total_molecules": total, "failed": failed, "vocab_size": len(vocab)}}
 
 
 def main():

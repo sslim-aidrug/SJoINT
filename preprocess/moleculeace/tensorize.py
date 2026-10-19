@@ -25,8 +25,12 @@ import os
 import multiprocessing as mp
 
 import torch
+import torch.multiprocessing
 
 from preprocess.core.utils import load_vocab, process_smiles, to_sample
+
+# workers return tensors; share them via files so a low open-file limit is not exhausted
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def _sample(args):

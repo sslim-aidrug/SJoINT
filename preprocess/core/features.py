@@ -1,7 +1,7 @@
 """Molecular featurisation and Junction-Tree decomposition.
 
     SMILES → atom features (51-D) + bond features (12-D)
-           → JT decomposition + fallback features (10-D)
+           → JT decomposition + structural descriptors (10-D)
            → jt2mol / mol2jt membership maps
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ RDLogger.DisableLog("rdApp.*")
 MOL_FEATURE_DIM = 51
 BOND_FEATURE_DIM = 12
 JT_FEATURE_DIM = 10
-# Extended JT node feature: 10-D fallback descriptors + mean of the member atoms'
+# Extended JT node feature: 10-D structural descriptors + mean of the member atoms'
 # 51-D features. This is the composition used by the released backbone (61-D).
 JT_FEATURE_DIM_EXTENDED = JT_FEATURE_DIM + MOL_FEATURE_DIM
 JT_EDGE_FEATURE_DIM = MOL_FEATURE_DIM + 4
@@ -199,31 +199,29 @@ def tree_decomp(mol):
             jt_nodes.append([bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()])
 
     jt_nodes.extend([list(x) for x in Chem.GetSymmSSSR(mol)])
-    if not jt_nodes:
-        return [[0]], []
 
     nei_list = [[] for _ in range(n_atoms)]
     for i, node in enumerate(jt_nodes):
         for atom in node:
             nei_list[atom].append(i)
 
-    node_sets = [set(n) if len(n) > 2 else None for n in jt_nodes]
+    # merge rings sharing more than two atoms (as in Jin et al., icml18-jtnn)
     for i in range(len(jt_nodes)):
-        if node_sets[i] is None or not jt_nodes[i]:
+        if len(jt_nodes[i]) <= 2:
             continue
         for atom in jt_nodes[i]:
             for j in nei_list[atom]:
-                if i >= j or node_sets[j] is None or not jt_nodes[j]:
+                if i >= j or len(jt_nodes[j]) <= 2:
                     continue
-                if len(node_sets[i] & node_sets[j]) > 2:
-                    node_sets[i] |= node_sets[j]
-                    jt_nodes[i] = list(node_sets[i])
+                if len(set(jt_nodes[i]) & set(jt_nodes[j])) > 2:
+                    jt_nodes[i].extend(jt_nodes[j])
+                    jt_nodes[i] = list(set(jt_nodes[i]))
                     jt_nodes[j] = []
-                    node_sets[j] = None
 
     jt_nodes = [n for n in jt_nodes if n]
-    if not jt_nodes:
-        return [[0]], []
+    # atoms in no bond or ring (e.g. isolated ions) become single-atom nodes
+    covered = {a for n in jt_nodes for a in n}
+    jt_nodes.extend([a] for a in range(n_atoms) if a not in covered)
 
     nei_list = [[] for _ in range(n_atoms)]
     for i, node in enumerate(jt_nodes):
@@ -280,11 +278,8 @@ def tree_decomp(mol):
 
 def jt_node_to_smiles(mol, atoms: list[int]) -> str:
     """Convert a JT node (atom indices) to canonical SMILES."""
-    try:
-        smiles = Chem.MolFragmentToSmiles(mol, atomsToUse=atoms, canonical=True)
-        return smiles if smiles else "C"
-    except Exception:
-        return ".".join(mol.GetAtomWithIdx(a).GetSymbol() for a in atoms)
+    smiles = Chem.MolFragmentToSmiles(mol, atomsToUse=atoms, canonical=True)
+    return smiles if smiles else "C"
 
 
 def build_jt_mol_mappings(jt_nodes: list[list[int]], num_atoms: int):
@@ -361,7 +356,7 @@ def compute_sub_atom_pool(atom_features: np.ndarray, atoms: list[int]) -> list[f
 
 
 def compute_jt_features(mol, atoms: list[int]) -> list[float]:
-    """Compute 10-D fallback features for an out-of-vocabulary JT node."""
+    """Compute the 10-D structural descriptors of a JT node."""
     n = len(atoms)
     atom_set = set(atoms)
     n_bonds = 0

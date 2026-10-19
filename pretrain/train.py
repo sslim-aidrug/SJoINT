@@ -117,7 +117,7 @@ def train_one_epoch(model, loader, optimizer, scaler, device, temperature, epoch
         optimizer.zero_grad(set_to_none=True)
         with autocast(device_type='cuda', dtype=amp_dtype, enabled=True):
             p_jt, p_mol = model(jt_batch, mol_batch, *masks)
-            loss = nt_xent_loss(p_jt, p_mol, temperature=temperature)
+        loss = nt_xent_loss(p_jt.float(), p_mol.float(), temperature=temperature)  # fp32 loss
 
         if use_scaler:
             scaler.scale(loss).backward()
@@ -149,16 +149,13 @@ def evaluate(model, loader, device, temperature, amp_dtype=torch.float16):
         jt_batch, mol_batch, masks = _to_device(batch, device)
         with autocast(device_type='cuda', dtype=amp_dtype, enabled=True):
             p_jt, p_mol = model(jt_batch, mol_batch, *masks)
-            loss = nt_xent_loss(p_jt, p_mol, temperature=temperature)
+        loss = nt_xent_loss(p_jt.float(), p_mol.float(), temperature=temperature)
         total_loss += loss.detach()
         n += 1
     return (total_loss / max(n, 1)).item()
 
 
-def _load_vocab_size(data_path):
-    vocab_path = os.path.join(data_path, "vocab.json")
-    if not os.path.exists(vocab_path):
-        vocab_path = os.path.join(os.path.dirname(data_path.rstrip("/")), "vocab.json")
+def _load_vocab_size(vocab_path):
     with open(vocab_path) as f:
         return len(json.load(f)["vocab"])
 
@@ -185,7 +182,7 @@ def _save_checkpoint(path, model, optimizer, scaler, epoch, best_loss, best_epoc
 
 
 def main(args):
-    jt_vocab_size = _load_vocab_size(args.data_path)
+    jt_vocab_size = _load_vocab_size(args.vocab_path)
     jt_feature_dim = _infer_jt_feature_dim(args.data_path)
 
     resume = args.resume_ckpt and os.path.exists(args.resume_ckpt)
@@ -203,10 +200,10 @@ def main(args):
     num_chunks = len(glob.glob(os.path.join(args.data_path, "*.pt")))
     chunk_perm = torch.randperm(num_chunks, generator=torch.Generator().manual_seed(args.seed)).tolist()
     split = int(0.8 * num_chunks)
-    train_idx, test_idx = sorted(chunk_perm[:split]), sorted(chunk_perm[split:])
+    train_idx, val_idx = sorted(chunk_perm[:split]), sorted(chunk_perm[split:])
 
     train_ds = GraphPairDataset(args.data_path, split_indices=train_idx)
-    test_ds = GraphPairDataset(args.data_path, split_indices=test_idx)
+    val_ds = GraphPairDataset(args.data_path, split_indices=val_idx)
 
     loader_kw = dict(
         batch_size=args.batch_size, collate_fn=custom_collate,
@@ -216,8 +213,8 @@ def main(args):
         worker_init_fn=_seed_worker)
     g = torch.Generator()
     g.manual_seed(args.seed)
-    train_loader = DataLoader(train_ds, shuffle=True, generator=g, **loader_kw)
-    test_loader = DataLoader(test_ds, shuffle=False, **loader_kw)
+    train_loader = DataLoader(train_ds, shuffle=True, drop_last=True, generator=g, **loader_kw)
+    val_loader = DataLoader(val_ds, shuffle=False, **loader_kw)
 
     model = SJoINTModel(
         jt_vocab_size=jt_vocab_size,
@@ -262,7 +259,7 @@ def main(args):
     logger.info("=" * 65)
     logger.info(f"  Device : {device}  |  Params : {n_params:,}")
     logger.info(f"  Train  : {len(train_ds):,} ({len(train_idx)} chunks)")
-    logger.info(f"  Test   : {len(test_ds):,} ({len(test_idx)} chunks)")
+    logger.info(f"  Val    : {len(val_ds):,} ({len(val_idx)} chunks)")
     logger.info(f"  Vocab  : {jt_vocab_size}")
     logger.info(f"  JT Feat: {jt_feature_dim}")
     logger.info(f"  LR: {args.learning_rate}  WD: {args.weight_decay}  "
@@ -282,11 +279,11 @@ def main(args):
         start = time.time()
         t_loss = train_one_epoch(model, train_loader, optimizer, scaler, device,
                                  args.temperature, epoch, amp_dtype=amp_dtype)
-        v_loss = evaluate(model, test_loader, device, args.temperature,
+        v_loss = evaluate(model, val_loader, device, args.temperature,
                           amp_dtype=amp_dtype)
 
         logger.info(
-            f"Epoch {epoch:03d} | Train: {t_loss:.6f} | Test: {v_loss:.6f} | "
+            f"Epoch {epoch:03d} | Train: {t_loss:.6f} | Val: {v_loss:.6f} | "
             f"LR: {scheduler.get_lr():.6f} | {time.time()-start:.1f}s")
 
         if v_loss < best_loss:
@@ -306,10 +303,12 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="SJoINT contrastive pre-training")
     parser.add_argument('--data_path', type=str, default="./data/processed/zinc250k/",
-                        help="Directory containing .pt chunk files and vocab.json")
+                        help="Directory containing the .pt chunk files")
+    parser.add_argument('--vocab_path', type=str, default="./data/vocab/vocab_zinc.json",
+                        help="JT vocabulary used to tensorize the chunks")
     parser.add_argument('--checkpoint_dir', type=str, default="./checkpoints/")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--temperature', type=float, default=0.10)
+    parser.add_argument('--temperature', type=float, default=0.07)
     parser.add_argument('--weight_decay', type=float, default=5e-5)
     parser.add_argument('--warmup_epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=256)
