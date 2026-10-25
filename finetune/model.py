@@ -102,7 +102,7 @@ def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1750, num_ca_b
     jt_use_edge_attr = _detect_jt_use_edge_attr(cleaned)
     jt_use_jk = _detect_jt_use_jk(cleaned)
     jt_feature_dim = _detect_jt_feature_dim(cleaned)
-    num_ca_blocks = _detect_num_ca_blocks(cleaned) or num_ca_blocks
+    num_ca_blocks = _detect_num_ca_blocks(cleaned)
     for k in ("jt_encoder.jt_embedding.weight", "_orig_mod.jt_encoder.jt_embedding.weight"):
         if k in cleaned:
             jt_vocab_size = int(cleaned[k].shape[0])
