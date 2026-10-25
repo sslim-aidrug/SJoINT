@@ -1,4 +1,4 @@
-"""Fine-tuning dataset, collate, cross-attention masks, and label normalisation."""
+"""Fine-tuning dataset, collate, cross-attention masks, and label normalization."""
 import logging
 
 import torch
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def _flatten_mapping(mapping):
-    """Convert a list-of-lists mapping into two flat 1D long tensors (rows, cols)."""
+    """List-of-lists membership map -> flat (rows, cols) index tensors."""
     rows, cols = [], []
     for i, targets in enumerate(mapping):
         if not targets:
@@ -23,14 +23,7 @@ def _flatten_mapping(mapping):
 
 
 class FinetuneDataset(Dataset):
-    """Loads a preprocessed .pt file (list of dicts) into memory.
-
-    Each sample contains:
-      - jt_graph, mol_graph (PyG Data)
-      - jt2mol_rows, jt2mol_cols, mol2jt_rows, mol2jt_cols (flat long tensors,
-        precomputed once so collate_fn can skip the Python loop)
-      - labels (num_tasks,)
-    """
+    """In-memory dataset of (JT graph, molecular graph, membership indices, labels) from a .pt file."""
 
     def __init__(self, pt_path):
         super().__init__()
@@ -41,17 +34,17 @@ class FinetuneDataset(Dataset):
         self.data = []
         for item in raw:
             jt_graph = Data(
-                vocab_ids=item["jt_vocab_ids"],          # (N_jt,)
-                features=item["jt_features"],            # (N_jt, 61)
-                edge_index=item["jt_edge_index"],        # (2, E_jt)
-                edge_attr=item.get("jt_edge_attr"),      # (E_jt, 55) or None
+                vocab_ids=item["jt_vocab_ids"],
+                features=item["jt_features"],
+                edge_index=item["jt_edge_index"],
+                edge_attr=item.get("jt_edge_attr"),
                 num_nodes=item["jt_vocab_ids"].size(0),
             )
             mol_graph = Data(
-                atom_ids=item["mol_atom_ids"],           # (N_atom,)
-                features=item["mol_x"],                  # (N_atom, 51)
-                edge_index=item["mol_edge_index"],       # (2, E_mol)
-                edge_attr=item["mol_edge_attr"],         # (E_mol, 12)
+                atom_ids=item["mol_atom_ids"],
+                features=item["mol_x"],
+                edge_index=item["mol_edge_index"],
+                edge_attr=item["mol_edge_attr"],
                 num_nodes=item["mol_atom_ids"].size(0),
             )
             j2m_r, j2m_c = _flatten_mapping(item.get("jt2mol_map", []))
@@ -75,7 +68,7 @@ class FinetuneDataset(Dataset):
 
 
 def _stack_mapping(batch, key_r, key_c):
-    """Concatenate per-sample (row, col) tensors with a batch index tensor."""
+    """Concatenate per-sample (row, col) indices and add the batch index."""
     bs, rs, cs = [], [], []
     for b, d in enumerate(batch):
         r, c = d[key_r], d[key_c]
@@ -92,12 +85,6 @@ def _stack_mapping(batch, key_r, key_c):
 
 
 def collate_fn(batch):
-    """Collate a list of samples into a single batch dict.
-
-    The cross-attention mask data is delivered as flat (b, r, c) index tensors;
-    the model builds the dense mask on-device from these in O(N) operations,
-    avoiding a per-batch Python loop.
-    """
     batch = [d for d in batch if d is not None]
     if not batch:
         return None
@@ -110,17 +97,12 @@ def collate_fn(batch):
         "mol_batch": Batch.from_data_list([d["mol_graph"] for d in batch]),
         "jt2mol_b": j2m_b, "jt2mol_r": j2m_r, "jt2mol_c": j2m_c,
         "mol2jt_b": m2j_b, "mol2jt_r": m2j_r, "mol2jt_c": m2j_c,
-        "labels": torch.stack([d["labels"] for d in batch]),   # (B, num_tasks)
+        "labels": torch.stack([d["labels"] for d in batch]),
     }
 
 
 def build_cross_attn_mask(b_idx, r_idx, c_idx, B, max_q, max_k, pad_mask_k):
-    """Build a (B, 1, max_q, max_k) additive attention mask from flat indices.
-
-    Entries listed in (b_idx, r_idx, c_idx) become 0; everything else -inf.
-    Rows with no member key (padded query positions) are reset to 0 to avoid
-    NaN in softmax; every real atom belongs to at least one JT node.
-    """
+    """Additive (B, 1, max_q, max_k) mask: 0 for member pairs, -inf elsewhere."""
     device = pad_mask_k.device
     mask = torch.full((B, 1, max_q, max_k), float("-inf"), device=device)
     if b_idx.numel() > 0:
@@ -134,8 +116,8 @@ def build_cross_attn_mask(b_idx, r_idx, c_idx, B, max_q, max_k, pad_mask_k):
 
 
 def compute_label_stats(dataset):
-    """Mean / std of labels over the train split (per task), ignoring NaN."""
-    labels = torch.stack([s["labels"] for s in dataset.data])  # (N, num_tasks)
+    """Per-task label mean / std, ignoring NaN."""
+    labels = torch.stack([s["labels"] for s in dataset.data])
     nan_mask = torch.isnan(labels)
     safe = labels.masked_fill(nan_mask, 0.0)
     cnt = (~nan_mask).sum(dim=0).clamp(min=1).float()
@@ -146,6 +128,5 @@ def compute_label_stats(dataset):
 
 
 def normalize_labels(dataset, mean, std):
-    """In-place z-score normalization of labels for a FinetuneDataset."""
     for s in dataset.data:
         s["labels"] = (s["labels"] - mean) / std

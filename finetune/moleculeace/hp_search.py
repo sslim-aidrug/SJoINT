@@ -1,15 +1,4 @@
-"""MoleculeACE hyper-parameter search by k-fold cross-validation.
-
-Following the original protocol (van Tilborg et al., 2022), hyper-parameters are
-selected with **k-fold cross-validation on the fixed training set** (folds
-stratified by median-binarized activity; no test-set peeking) and **Bayesian
-optimization with a Gaussian process** (Optuna GPSampler),
-evaluating at most `n_trials` (default 50) combinations of the search space. Each
-proposed combination is scored by the mean held-out RMSE over `n_folds` CV folds
-(train on the other folds, early-stop on the held-out fold); a combination the
-optimizer proposes again reuses its cached score. The best combination is written
-to `<out_dir>/<task>_hp.json`.
-
+"""MoleculeACE hyperparameter search: GP Bayesian optimization scored by k-fold CV RMSE.
     python finetune/moleculeace/hp_search.py --task CHEMBL204_Ki --gpu_id 0
 """
 import os
@@ -27,18 +16,18 @@ import torch
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-from core import (                                                    # noqa: E402
+from common import (                                                    # noqa: E402
     load_task, kfold_indices, label_values, _clone_subset, BackboneTemplate,
     make_ctx, train_eval,
 )
-from engine import seed_everything, infer_jt_feature_dim              # noqa: E402
+from utils import seed_everything, infer_jt_feature_dim              # noqa: E402
 
 _FINETUNE_DIR = os.path.dirname(_HERE)
 _PROJECT_ROOT = os.path.dirname(_FINETUNE_DIR)
 DEFAULT_DATA_BASE = os.path.join(_PROJECT_ROOT, "data", "processed", "moleculeace")
 DEFAULT_PRETRAIN_CKPT = os.path.join(_PROJECT_ROOT, "checkpoints", "SJoINT_zinc250k_pretrained.pt")
 
-from moleculenet.configs import SEARCH_SPACE as _SPACE                # noqa: E402  (shared grid)
+from moleculenet.configs import MOLECULEACE_SEARCH_SPACE as _SPACE                # noqa: E402
 
 
 def hp_tag(hp):
@@ -48,7 +37,6 @@ def hp_tag(hp):
 
 
 def suggest(trial):
-    """One HP combination from the (categorical) search space."""
     return {k: trial.suggest_categorical(k, v) for k, v in _SPACE.items()}
 
 
@@ -66,13 +54,13 @@ def main():
     ap.add_argument("--data_base", default=DEFAULT_DATA_BASE)
     ap.add_argument("--pretrain_ckpt", default=DEFAULT_PRETRAIN_CKPT)
     ap.add_argument("--out_dir", default=os.path.join(_HERE, "hp_cv"))
+    ap.add_argument("--hp_json", default=os.path.join(_HERE, "moleculeace_hp.json"), help="hyperparameter table to update")
     ap.add_argument("--gpu_id", type=int, default=0)
     ap.add_argument("--n_folds", type=int, default=5)
     ap.add_argument("--cv_seed", type=int, default=42)
     ap.add_argument("--max_epochs", type=int, default=100)
     ap.add_argument("--es_patience", type=int, default=10)
-    ap.add_argument("--n_trials", type=int, default=50,
-                    help="max HP combinations evaluated by Bayesian optimization")
+    ap.add_argument("--n_trials", type=int, default=50, help="max combinations evaluated")
     ap.add_argument("--search_seed", type=int, default=0)
     ap.add_argument("--num_workers", type=int, default=2)
     args = ap.parse_args()
@@ -118,10 +106,10 @@ def main():
                 "median_best_epoch": int(statistics.median(fold_ep))}
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)  # GPSampler
+    warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
     study = optuna.create_study(direction="minimize",
                                 sampler=optuna.samplers.GPSampler(seed=args.search_seed))
-    cache = {}                                    # hp_tag -> CV result (repeat proposals reuse it)
+    cache = {}  # repeated proposals reuse their CV score
     for t in range(args.n_trials):
         trial = study.ask()
         hp = suggest(trial)
@@ -138,6 +126,10 @@ def main():
            "task_type": task_type, "selected": best, "all": results}
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2)
+    table = json.load(open(args.hp_json)) if os.path.exists(args.hp_json) else {}
+    table[args.task] = {"hp": best["hp"], "hp_tag": best["hp_tag"], "cv_rmse": round(best["cv_rmse"], 4)}
+    with open(args.hp_json, "w") as f:
+        json.dump(table, f, indent=2)
     print(f"[mace-cv] {args.task} BEST {best['hp_tag']} "
           f"CV_RMSE={best['cv_rmse']:.4f} median_best_epoch={best['median_best_epoch']} -> {out_path}", flush=True)
 

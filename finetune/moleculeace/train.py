@@ -1,13 +1,4 @@
-"""MoleculeACE evaluation entry point (original protocol).
-
-Follows the deep-learning evaluation of MoleculeACE (van Tilborg et al. 2022;
-`MoleculeACE.benchmark.utils.cross_validate`): the fixed training set is split
-into folds stratified by median-binarized activity; for the given `--fold`, a
-model is trained on the other folds with early stopping on this fold and then
-evaluated on the **fixed test set** (RMSE and RMSE_cliff). The reported value of
-a task is the average over the fold models (`aggregate.py`).
-
-    # hyper-parameters come from the CV search (moleculeace_hp.json)
+"""MoleculeACE fold-model training and fixed-test evaluation.
     python finetune/moleculeace/train.py --task CHEMBL204_Ki --fold 0
 """
 import os
@@ -21,11 +12,11 @@ import torch
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-from core import (                                                    # noqa: E402
+from common import (                                                    # noqa: E402
     load_task, kfold_indices, label_values, _clone_subset, BackboneTemplate,
     make_ctx, train_eval,
 )
-from engine import seed_everything, infer_jt_feature_dim, setup_logger  # noqa: E402
+from utils import seed_everything, infer_jt_feature_dim, setup_logger  # noqa: E402
 
 _FINETUNE_DIR = os.path.dirname(_HERE)
 _PROJECT_ROOT = os.path.dirname(_FINETUNE_DIR)
@@ -38,12 +29,12 @@ DEFAULT_RESULTS_BASE = os.path.join(_HERE, "results")
 def main():
     ap = argparse.ArgumentParser(description="MoleculeACE per-fold training + fixed-test evaluation")
     ap.add_argument("--task", required=True)
-    ap.add_argument("--fold", type=int, default=0, help="validation fold index (0 .. n_folds-1)")
+    ap.add_argument("--fold", type=int, default=0, help="held-out fold index")
     ap.add_argument("--n_folds", type=int, default=5)
     ap.add_argument("--cv_seed", type=int, default=42)
     ap.add_argument("--data_base", default=DEFAULT_DATA_BASE)
     ap.add_argument("--pretrain_ckpt", default=DEFAULT_PRETRAIN_CKPT)
-    ap.add_argument("--hp_json", default=DEFAULT_HP_JSON, help="HP table: per-task entries (from the CV search) and a 'default' entry")
+    ap.add_argument("--hp_json", default=DEFAULT_HP_JSON, help="hyperparameter table")
     ap.add_argument("--max_epochs", type=int, default=100)
     ap.add_argument("--es_patience", type=int, default=10)
     ap.add_argument("--results_base", default=DEFAULT_RESULTS_BASE)

@@ -1,10 +1,5 @@
-"""Split MoleculeNet CSVs into train / val / test (random or scaffold, 80/10/10).
-
-Usage:
-    python -m preprocess.moleculenet.split \\
-        --mode scaffold --csv_dir data/raw/moleculenet \\
-        --out_dir data/processed/moleculenet/scaffold_split \\
-        --seeds 42
+"""MoleculeNet train/val/test split (random or scaffold, 80/10/10).
+    python -m preprocess.moleculenet.split --mode scaffold --csv_dir data/raw/moleculenet --out_dir data/processed/moleculenet/scaffold_split --seeds 42
 """
 from __future__ import annotations
 
@@ -108,11 +103,10 @@ def save_split_csv(filepath, smiles, labels, label_names, indices):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, choices=["random", "scaffold", "both"],
-                        help="random / scaffold / both (writes to <out_dir>/random and <out_dir>/scaffold)")
+                        help="split mode; both writes <out_dir>/random and <out_dir>/scaffold")
     parser.add_argument("--csv_dir", required=True)
     parser.add_argument("--out_dir", required=True)
-    parser.add_argument("--seeds", nargs="+", type=int, default=DEFAULT_SEEDS,
-                        help=f"List of random seeds (default: {DEFAULT_SEEDS})")
+    parser.add_argument("--seeds", nargs="+", type=int, default=DEFAULT_SEEDS, help="split seeds")
     parser.add_argument("--datasets", nargs="+", default=list(DATASET_CONFIGS.keys()))
     args = parser.parse_args()
 

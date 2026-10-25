@@ -1,8 +1,4 @@
-"""Aggregate MoleculeACE final results into a per-task table + macro average.
-
-Reads `<results>/<task>/fold<k>/results.json` and writes `moleculeace_results.csv`
-(per-task RMSE / RMSE_cliff averaged over the fold models, plus a MEAN row).
-
+"""Average MoleculeACE fold-model results per task into a CSV.
     python finetune/moleculeace/aggregate.py [results_dir] [out_csv]
 """
 import os

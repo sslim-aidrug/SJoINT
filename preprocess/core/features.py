@@ -1,9 +1,4 @@
-"""Molecular featurisation and Junction-Tree decomposition.
-
-    SMILES → atom features (51-D) + bond features (12-D)
-           → JT decomposition + structural descriptors (10-D)
-           → jt2mol / mol2jt membership maps
-"""
+"""Atom/bond featurization, junction-tree decomposition, and JT node/edge features."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -20,8 +15,6 @@ RDLogger.DisableLog("rdApp.*")
 MOL_FEATURE_DIM = 51
 BOND_FEATURE_DIM = 12
 JT_FEATURE_DIM = 10
-# Extended JT node feature: 10-D structural descriptors + mean of the member atoms'
-# 51-D features. This is the composition used by the released backbone (61-D).
 JT_FEATURE_DIM_EXTENDED = JT_FEATURE_DIM + MOL_FEATURE_DIM
 JT_EDGE_FEATURE_DIM = MOL_FEATURE_DIM + 4
 
@@ -73,7 +66,7 @@ MST_MAX_WEIGHT = 100
 
 
 def precompute_mol_properties(mol):
-    """Precompute Gasteiger charges, Crippen, TPSA, and H-bond properties."""
+    """Attach Gasteiger, Crippen, TPSA, and H-bond donor/acceptor atom properties."""
     try:
         rdPartialCharges.ComputeGasteigerCharges(mol)
     except Exception:
@@ -101,7 +94,6 @@ def precompute_mol_properties(mol):
 
 
 def get_atom_features(atom, ring_info=None) -> tuple[int, np.ndarray]:
-    """Return (atomic_number, 51-D feature vector) for a single atom."""
     feats = np.zeros(MOL_FEATURE_DIM, dtype=np.float32)
     offset = 0
     atom_id = atom.GetAtomicNum()
@@ -169,7 +161,6 @@ def get_atom_features(atom, ring_info=None) -> tuple[int, np.ndarray]:
 
 
 def get_bond_features(bond) -> np.ndarray:
-    """Return 12-D feature vector for a single bond."""
     feats = np.zeros(BOND_FEATURE_DIM, dtype=np.float32)
     bt = bond.GetBondType()
     if bt in BOND_TYPES:
@@ -183,12 +174,7 @@ def get_bond_features(bond) -> np.ndarray:
 
 
 def tree_decomp(mol):
-    """Decompose molecule into a Junction Tree.
-
-    Returns:
-        jt_nodes: list of atom-index lists per JT node
-        jt_edges: list of (src, dst) edge tuples
-    """
+    """Junction-tree decomposition (Jin et al., 2018): returns (atom lists per node, edges)."""
     n_atoms = mol.GetNumAtoms()
     if n_atoms == 1:
         return [[0]], []
@@ -205,7 +191,7 @@ def tree_decomp(mol):
         for atom in node:
             nei_list[atom].append(i)
 
-    # merge rings sharing more than two atoms (as in Jin et al., icml18-jtnn)
+    # merge rings sharing more than two atoms
     for i in range(len(jt_nodes)):
         if len(jt_nodes[i]) <= 2:
             continue
@@ -277,13 +263,11 @@ def tree_decomp(mol):
 
 
 def jt_node_to_smiles(mol, atoms: list[int]) -> str:
-    """Convert a JT node (atom indices) to canonical SMILES."""
     smiles = Chem.MolFragmentToSmiles(mol, atomsToUse=atoms, canonical=True)
     return smiles if smiles else "C"
 
 
 def build_jt_mol_mappings(jt_nodes: list[list[int]], num_atoms: int):
-    """Build bidirectional jt2mol / mol2jt membership maps."""
     jt2mol = [sorted(n) for n in jt_nodes]
     mol2jt = [[] for _ in range(num_atoms)]
     for jt_idx, atoms in enumerate(jt2mol):
@@ -293,7 +277,6 @@ def build_jt_mol_mappings(jt_nodes: list[list[int]], num_atoms: int):
 
 
 def build_jt_edge_index(jt_edges) -> torch.Tensor:
-    """Convert edge list to undirected edge_index tensor (2, 2E)."""
     if not jt_edges:
         return torch.empty((2, 0), dtype=torch.long)
     ei = torch.tensor(jt_edges, dtype=torch.long).t().contiguous()
@@ -301,15 +284,7 @@ def build_jt_edge_index(jt_edges) -> torch.Tensor:
 
 
 def build_jt_edge_attr(jt_nodes, jt_edges, atom_ids: np.ndarray, atom_features: np.ndarray) -> torch.Tensor:
-    """Build undirected JT edge features from shared-atom chemistry.
-
-    Feature layout:
-      - mean shared-atom feature vector (51D)
-      - shared atom count / 4
-      - any aromatic shared atom
-      - any hetero shared atom
-      - any shared atom in ring
-    """
+    """JT edge features from the atoms shared by the two nodes."""
     if not jt_edges:
         return torch.zeros((0, JT_EDGE_FEATURE_DIM), dtype=torch.float32)
 
@@ -321,9 +296,9 @@ def build_jt_edge_attr(jt_nodes, jt_edges, atom_ids: np.ndarray, atom_features: 
             shared_arr = atom_features[shared]
             mean_feat = shared_arr.mean(axis=0).astype(np.float32)
             count_norm = min(len(shared), 4) / 4.0
-            aromatic_any = float(shared_arr[:, 7].max() > 0)   # atom aromatic flag
+            aromatic_any = float(shared_arr[:, 7].max() > 0)
             hetero_any = float(np.any((atom_ids[shared] != 6) & (atom_ids[shared] != 1)))
-            ring_any = float(shared_arr[:, 28].max() > 0)      # atom ring flag
+            ring_any = float(shared_arr[:, 28].max() > 0)
         else:
             mean_feat = np.zeros((MOL_FEATURE_DIM,), dtype=np.float32)
             count_norm = aromatic_any = hetero_any = ring_any = 0.0
@@ -339,16 +314,7 @@ def build_jt_edge_attr(jt_nodes, jt_edges, atom_ids: np.ndarray, atom_features: 
 
 
 def compute_sub_atom_pool(atom_features: np.ndarray, atoms: list[int]) -> list[float]:
-    """Mean over atom_features for the atoms in this substructure.
-
-    Args:
-        atom_features: (N_atoms, MOL_FEATURE_DIM) precomputed atom features
-        atoms: atom indices in this JT node
-
-    Returns:
-        51-D list = mean of the member atoms' features, giving each JT node its
-        molecule-context-aware atom chemistry.
-    """
+    """Mean atom feature vector of a substructure."""
     if not atoms or atom_features.shape[0] == 0:
         return [0.0] * MOL_FEATURE_DIM
     sub = atom_features[atoms]
@@ -356,7 +322,7 @@ def compute_sub_atom_pool(atom_features: np.ndarray, atoms: list[int]) -> list[f
 
 
 def compute_jt_features(mol, atoms: list[int]) -> list[float]:
-    """Compute the 10-D structural descriptors of a JT node."""
+    """10-D structural descriptors of a JT node."""
     n = len(atoms)
     atom_set = set(atoms)
     n_bonds = 0

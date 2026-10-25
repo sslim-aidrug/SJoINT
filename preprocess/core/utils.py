@@ -1,7 +1,4 @@
-"""I/O utilities for preprocessing.
-
-    Vocab loading → SMILES featurisation → tensor conversion → chunk saving
-"""
+"""Vocabulary loading, SMILES featurization, tensor conversion, chunk saving."""
 from __future__ import annotations
 
 import json
@@ -35,7 +32,6 @@ _VOCAB_FEATURES = None
 
 
 def load_vocab(vocab_path: str) -> int:
-    """Load JT vocabulary JSON into global cache. Returns vocab size."""
     global _VOCAB, _VOCAB_FEATURES
     with open(vocab_path) as f:
         data = json.load(f)
@@ -51,13 +47,12 @@ def get_vocab():
 
 
 def process_smiles(smiles: str) -> dict | None:
-    """Convert a SMILES string to a raw feature dict (numpy/list)."""
     try:
         rd_mol = Chem.MolFromSmiles(smiles)
         if rd_mol is None:
             return None
         canonical = Chem.MolToSmiles(rd_mol, canonical=True, isomericSmiles=True)
-        rd_mol = Chem.MolFromSmiles(canonical)   # atom order follows the stored SMILES
+        rd_mol = Chem.MolFromSmiles(canonical)  # atom order follows the canonical SMILES
         num_atoms = rd_mol.GetNumAtoms()
 
         jt_nodes, jt_edges = tree_decomp(rd_mol)
@@ -81,7 +76,7 @@ def process_smiles(smiles: str) -> dict | None:
         jt_feats_extended = []
         for node_atoms in jt_nodes:
             smi = jt_node_to_smiles(rd_mol, node_atoms)
-            vocab_id = vocab.get(smi, 1)   # 1 = <UNK> for out-of-vocab substructures
+            vocab_id = vocab.get(smi, 1)  # 1 = <UNK>
             jt_vocab_ids.append(vocab_id)
             base_feat = (vocab_features[smi] if smi in vocab_features
                          else compute_jt_features(rd_mol, node_atoms))
@@ -118,7 +113,6 @@ def process_smiles(smiles: str) -> dict | None:
 
 
 def to_sample(cpu_data: dict, labels: list[float] | None = None) -> dict:
-    """Convert raw feature dict to a tensor sample for .pt saving."""
     jt_feat_ext = torch.tensor(cpu_data["jt_features_extended"], dtype=torch.float32)
     if jt_feat_ext.dim() == 1:
         jt_feat_ext = jt_feat_ext.unsqueeze(0)
@@ -145,7 +139,6 @@ def to_sample(cpu_data: dict, labels: list[float] | None = None) -> dict:
 
 
 def save_chunk(data_list: list[dict], out_path: str, chunk_num: int):
-    """Save a list of tensor samples as a numbered .pt chunk."""
     base, ext = os.path.splitext(out_path)
     if not ext:
         ext = ".pt"

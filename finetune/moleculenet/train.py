@@ -1,9 +1,4 @@
-"""MoleculeNet fine-tuning entry point.
-
-Two-stage downstream training on the MoleculeNet benchmarks. Each dataset
-ships several random/scaffold splits (one per seed); the best epoch is selected
-by validation loss with early stopping.
-
+"""MoleculeNet fine-tuning.
     python finetune/moleculenet/train.py --dataset BBBP --seed 42
 """
 import os
@@ -20,7 +15,7 @@ _FINETUNE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _FINETUNE_DIR)
 
 from dataset import FinetuneDataset, collate_fn                       # noqa: E402
-from engine import (                                                  # noqa: E402
+from utils import (                                                  # noqa: E402
     seed_everything, _seed_worker, run_two_stage, build_model,
     normalize_regression, infer_jt_feature_dim, setup_logger, to_original_scale,
 )
@@ -34,44 +29,40 @@ DEFAULT_PRETRAIN_CKPT = os.path.join(_PROJECT_ROOT, "checkpoints", "SJoINT_zinc2
 
 @dataclass
 class Config:
-    # Dataset selection (one random/scaffold split per seed)
     dataset: str = "BBBP"
     seed: int = 42
 
-    # Backbone (architecture auto-detected from the checkpoint)
     num_ca_blocks: int = 3
     jt_vocab_size: int = 1750
     pretrain_ckpt: str = ""
 
-    # Prediction head
     head_hidden: int = DEFAULT_HP["head_hidden"]
     head_dropout: float = DEFAULT_HP["head_dropout"]
     num_head_layers: int = DEFAULT_HP["num_head_layers"]
     head_activation: str = "relu"
     head_norm: str = "layer"
 
-    # Two-stage schedule (max_epochs / patience are fixed protocol)
     learning_rate: float = DEFAULT_HP["learning_rate"]
-    backbone_lr_ratio: float = 0.1
+    backbone_lr_ratio: float = DEFAULT_HP["backbone_lr_ratio"]
     weight_decay: float = DEFAULT_HP["weight_decay"]
     batch_size: int = DEFAULT_HP["batch_size"]
     max_epochs: int = 100
     stage1_epochs: int = DEFAULT_HP["stage1_epochs"]
-    early_stop_patience: int = 20   # 0 = disabled
+    early_stop_patience: int = 20   # 0 disables
     grad_clip: float = 1.0
     use_amp: bool = True
-    pool_mode: str = "both"         # "both", "jt_only", "mol_only"
+    pool_mode: str = "both"
     drop_last_train: int = 1
     preserve_optimizer_state: bool = False
+    backbone_dropout: float = -1.0  # -1 keeps the pre-training value
+    freeze_bn: bool = False
 
-    # System / paths
     gpu_id: int = 0
     num_workers: int = 2
     data_base: str = ""
     results_base: str = ""
     save_best_ckpt: bool = False
 
-    # Derived
     data_dir: str = ""
     output_dir: str = ""
 
@@ -83,6 +74,8 @@ class Config:
         hp_tag = (
             f"s1e{self.stage1_epochs}_lr{self.learning_rate}_wd{self.weight_decay}_bs{self.batch_size}"
             f"_L{self.num_head_layers}_h{self.head_hidden}_d{self.head_dropout}"
+            f"_blr{self.backbone_lr_ratio}_{self.head_norm}_{self.head_activation}_bd{self.backbone_dropout}"
+            f"_bn{int(self.freeze_bn)}_po{int(self.preserve_optimizer_state)}"
         )
         self.output_dir = os.path.join(self.results_base, self.dataset, f"seed{self.seed}", hp_tag)
 
@@ -110,7 +103,7 @@ def build_loaders(args):
         "persistent_workers": args.num_workers > 0, "worker_init_fn": _seed_worker,
     }
     g = torch.Generator()
-    g.manual_seed(args.seed)                       # fix the training shuffle order
+    g.manual_seed(args.seed)
     train_loader = DataLoader(train_ds, shuffle=True,
                               drop_last=bool(args.drop_last_train), generator=g, **kw)
     val_loader = DataLoader(val_ds, shuffle=False, **kw)

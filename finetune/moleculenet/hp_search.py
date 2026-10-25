@@ -1,13 +1,5 @@
-"""MoleculeNet hyper-parameter search by validation loss.
-
-`n_combos` combinations (default 24) are sampled at random from `SEARCH_SPACE`
-(`configs.py`); each is fine-tuned with `train.py` on every given seed, and the
-combination with the lowest mean best-validation loss is selected. Test sets
-are never used for selection. The result is written to
-`<results_base>/<dataset>_hp.json`; pass the selected values to `train.py`.
-
-    python finetune/moleculenet/hp_search.py --dataset BBBP --seeds 42 43 44 \
-        --data_base data/processed/moleculenet/random_split
+"""MoleculeNet hyperparameter search by validation loss.
+    python finetune/moleculenet/hp_search.py --dataset BBBP --seeds 42 43 44
 """
 import os
 import sys
@@ -21,7 +13,7 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 from configs import SEARCH_SPACE                                      # noqa: E402
-from train import Config                                              # noqa: E402  (output-folder layout)
+from train import Config                                              # noqa: E402
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
 TRAIN = os.path.join(_HERE, "train.py")
@@ -44,10 +36,10 @@ def main():
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--seeds", nargs="+", type=int, default=[42, 43, 44])
     ap.add_argument("--n_combos", type=int, default=24)
-    ap.add_argument("--search_seed", type=int, default=0, help="seed for sampling the combinations")
+    ap.add_argument("--search_seed", type=int, default=0, help="sampling seed")
     ap.add_argument("--data_base", default=os.path.join(_PROJECT_ROOT, "data", "processed",
                                                          "moleculenet", "random_split"))
-    ap.add_argument("--pretrain_ckpt", default="", help="default: the released backbone")
+    ap.add_argument("--pretrain_ckpt", default="")
     ap.add_argument("--results_base", default=os.path.join(_HERE, "hp_search_results"))
     ap.add_argument("--gpu_id", type=int, default=0)
     ap.add_argument("--max_epochs", type=int, default=100)
@@ -60,14 +52,17 @@ def main():
         for seed in args.seeds:
             run_dir = Config(dataset=args.dataset, seed=seed, results_base=args.results_base, **hp).output_dir
             res = os.path.join(run_dir, "results.json")
-            if not os.path.exists(res):                      # resumable
+            if not os.path.exists(res):
                 cmd = [sys.executable, TRAIN, "--dataset", args.dataset, "--seed", str(seed),
                        "--data_base", args.data_base, "--results_base", args.results_base,
                        "--gpu_id", str(args.gpu_id), "--max_epochs", str(args.max_epochs)]
                 if args.pretrain_ckpt:
                     cmd += ["--pretrain_ckpt", args.pretrain_ckpt]
                 for k, v in hp.items():
-                    cmd += [f"--{k}", str(v)]
+                    if isinstance(v, bool):
+                        cmd += [f"--{k}"] if v else []
+                    else:
+                        cmd += [f"--{k}", str(v)]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
             val.append(json.load(open(res))["best_val_loss"])
         tag = os.path.basename(run_dir)

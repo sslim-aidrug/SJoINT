@@ -1,4 +1,6 @@
-"""SJoINT contrastive pretraining loop."""
+"""SJoINT contrastive pre-training.
+    python pretrain/train.py --data_path data/processed/zinc250k --vocab_path data/vocab/vocab_zinc.json --checkpoint_dir checkpoints/backbone
+"""
 import os
 import sys
 import glob
@@ -16,8 +18,6 @@ from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 
-# Avoid SCM_RIGHTS fd-passing exhaustion under many concurrent DataLoader procs
-# (failure mode: "received 0 items of ancdata" -> Pin memory thread exits).
 try:
     _torch_mp.set_sharing_strategy("file_system")
 except RuntimeError:
@@ -31,16 +31,12 @@ _MASK_KEYS = ('jt2mol_b', 'jt2mol_r', 'jt2mol_c',
 
 
 def _seed_worker(worker_id):
-    """Seed each DataLoader worker deterministically (best-effort reproducibility)."""
     worker_seed = torch.initial_seed() % (2 ** 32)
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 
 def seed_everything(seed):
-    """Best-effort reproducibility for pretraining. Full bit-determinism is not
-    guaranteed on GPU (GATv2/scatter atomic ops); use_deterministic_algorithms
-    (warn_only) falls back with a warning rather than erroring."""
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
@@ -117,7 +113,7 @@ def train_one_epoch(model, loader, optimizer, scaler, device, temperature, epoch
         optimizer.zero_grad(set_to_none=True)
         with autocast(device_type='cuda', dtype=amp_dtype, enabled=True):
             p_jt, p_mol = model(jt_batch, mol_batch, *masks)
-        loss = nt_xent_loss(p_jt.float(), p_mol.float(), temperature=temperature)  # fp32 loss
+        loss = nt_xent_loss(p_jt.float(), p_mol.float(), temperature=temperature)
 
         if use_scaler:
             scaler.scale(loss).backward()
@@ -126,7 +122,6 @@ def train_one_epoch(model, loader, optimizer, scaler, device, temperature, epoch
             scaler.step(optimizer)
             scaler.update()
         else:
-            # bfloat16 has fp32-equivalent exponent range — no loss-scaling needed.
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -190,11 +185,8 @@ def main(args):
     device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
     seed_everything(args.seed)
     if torch.cuda.is_available():
-        # Prefer the high-precision TF32/BF16 matmul path.
         torch.set_float32_matmul_precision("high")
 
-    # AMP dtype: bfloat16 has the same exponent range as fp32, so no GradScaler is
-    # needed and the fp16 underflow path is avoided. Pass --no-bf16 for fp16.
     amp_dtype = torch.bfloat16 if args.bf16 else torch.float16
 
     num_chunks = len(glob.glob(os.path.join(args.data_path, "*.pt")))
@@ -208,8 +200,8 @@ def main(args):
     loader_kw = dict(
         batch_size=args.batch_size, collate_fn=custom_collate,
         num_workers=args.num_workers, pin_memory=True,
-        persistent_workers=args.num_workers > 0,
-        prefetch_factor=4 if args.num_workers > 0 else None,
+        persistent_workers=False,
+        prefetch_factor=2 if args.num_workers > 0 else None,
         worker_init_fn=_seed_worker)
     g = torch.Generator()
     g.manual_seed(args.seed)
@@ -219,11 +211,10 @@ def main(args):
     model = SJoINTModel(
         jt_vocab_size=jt_vocab_size,
         jt_feature_dim=jt_feature_dim,
+        dropout=args.dropout, ca_dropout=args.ca_dropout,
     ).to(device)
 
     if args.compile:
-        # mode="default" is most permissive for dynamic shapes (PyG graphs vary per batch).
-        # "reduce-overhead" wants static shapes via CUDA graphs and tends to recompile a lot.
         try:
             model = torch.compile(model, mode="default")
             logging.info("  torch.compile enabled (mode=default)")
@@ -232,10 +223,8 @@ def main(args):
 
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-    # GradScaler only for fp16; bf16 has fp32 dynamic range.
     scaler = GradScaler(enabled=(torch.cuda.is_available() and amp_dtype == torch.float16))
 
-    # Resume from checkpoint
     start_epoch = 1
     best_loss, best_epoch = float('inf'), 0
     if resume:
@@ -248,7 +237,6 @@ def main(args):
             best_loss = ckpt['best_loss']
             best_epoch = ckpt['best_epoch']
         else:
-            # Plain state_dict (no optimizer/epoch): restart the schedule from epoch 1.
             model.load_state_dict(ckpt)
         logger.info(f"  Resumed from {args.resume_ckpt} (epoch {start_epoch}, best={best_loss:.6f})")
 
@@ -263,7 +251,8 @@ def main(args):
     logger.info(f"  Vocab  : {jt_vocab_size}")
     logger.info(f"  JT Feat: {jt_feature_dim}")
     logger.info(f"  LR: {args.learning_rate}  WD: {args.weight_decay}  "
-                f"Temp: {args.temperature}  Warmup: {args.warmup_epochs}")
+                f"Temp: {args.temperature}  Warmup: {args.warmup_epochs}  "
+                f"Dropout: gnn {args.dropout} / ca {args.ca_dropout}")
     logger.info(f"  CA Blocks: {len(model.blocks)}")
     logger.info(f"  BS: {args.batch_size}  Epochs: {start_epoch}-{args.max_epochs}")
     logger.info(f"  AMP dtype: {amp_dtype}  scaler: {scaler.is_enabled()}")
@@ -303,26 +292,24 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="SJoINT contrastive pre-training")
     parser.add_argument('--data_path', type=str, default="./data/processed/zinc250k/",
-                        help="Directory containing the .pt chunk files")
+                        help="directory of .pt chunks")
     parser.add_argument('--vocab_path', type=str, default="./data/vocab/vocab_zinc.json",
-                        help="JT vocabulary used to tensorize the chunks")
+                        help="JT vocabulary")
     parser.add_argument('--checkpoint_dir', type=str, default="./checkpoints/")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--temperature', type=float, default=0.07)
     parser.add_argument('--weight_decay', type=float, default=5e-5)
     parser.add_argument('--warmup_epochs', type=int, default=10)
+    parser.add_argument('--dropout', type=float, default=0.0, help="GNN encoder dropout")
+    parser.add_argument('--ca_dropout', type=float, default=0.1, help="cross-attention dropout")
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_epochs', type=int, default=100)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--gpu_id', type=int, default=0)
     parser.add_argument('--num_workers', type=int, default=16)
-    parser.add_argument('--compile', action='store_true',
-                        help="Wrap model with torch.compile (Inductor)")
-    parser.add_argument('--bf16', action='store_true', default=True,
-                        help="Use bfloat16 AMP (default). "
-                             "Pass --no-bf16 to fall back to fp16+GradScaler.")
-    parser.add_argument('--no-bf16', dest='bf16', action='store_false')
-    parser.add_argument('--resume_ckpt', type=str, default='',
-                        help="Path to checkpoint for resuming training")
+    parser.add_argument('--compile', action='store_true', help="torch.compile the model")
+    parser.add_argument('--bf16', action='store_true', default=True, help="bfloat16 AMP (default)")
+    parser.add_argument('--no-bf16', dest='bf16', action='store_false', help="fp16 AMP with GradScaler")
+    parser.add_argument('--resume_ckpt', type=str, default='', help="checkpoint to resume from")
 
     main(parser.parse_args())

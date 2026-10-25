@@ -1,10 +1,5 @@
-"""MoleculeNet tensoriser: per-split CSVs -> .pt files.
-
-Usage:
-    python -m preprocess.moleculenet.tensorize \\
-        --data_dir data/processed/moleculenet/random_split \\
-        --vocab data/vocab/vocab_zinc.json \\
-        --seeds 42
+"""MoleculeNet tensorizer: split CSVs -> .pt files.
+    python -m preprocess.moleculenet.tensorize --data_dir data/processed/moleculenet/random_split --vocab data/vocab/vocab_zinc.json --seeds 42
 """
 from __future__ import annotations
 
@@ -20,7 +15,6 @@ import torch.multiprocessing
 from preprocess.core.configs import DATASET_CONFIGS
 from preprocess.core.utils import load_vocab, process_smiles, to_sample
 
-# workers return tensors; share them via files so a low open-file limit is not exhausted
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 DEFAULT_SEEDS = [42]
@@ -83,7 +77,6 @@ def process_split(csv_path, pt_path, dataset_name, feature_cache):
 
 
 def discover_seeds(ds_dir):
-    """Fallback: enumerate seed* subdirs actually present on disk."""
     pat = re.compile(r"^seed(\d+)$")
     seeds = []
     for name in sorted(os.listdir(ds_dir)):
@@ -94,7 +87,6 @@ def discover_seeds(ds_dir):
 
 
 def collect_unique_smiles(ds_dir, dataset_name, seeds):
-    """Collect unique SMILES appearing in any seed/split for a dataset directory."""
     unique = []
     seen = set()
     for seed in seeds:
@@ -112,7 +104,6 @@ def collect_unique_smiles(ds_dir, dataset_name, seeds):
 
 
 def ensure_feature_cache(ds_name, ds_dir, seeds, pool, chunksize=64):
-    """Build or extend per-dataset feature cache once, then reuse across all splits."""
     cache = FEATURE_CACHE.setdefault(ds_name, {})
     unique_smiles = collect_unique_smiles(ds_dir, ds_name, seeds)
     pending = [smi for smi in unique_smiles if smi not in cache]
@@ -139,7 +130,6 @@ def tensorize_dataset(ds_name, ds_dir, seeds, pool, auto_discover=False, skip_ex
             return
         seeds = found
 
-    # Pick any existing seed dir to read header for "auto" label cols
     label_cols = None
     if cfg["label_cols"] == "auto":
         for seed in seeds:
@@ -181,19 +171,14 @@ def tensorize_dataset(ds_name, ds_dir, seeds, pool, auto_discover=False, skip_ex
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", required=True,
-                        help="Split CSV root dir. If --mode both was used in split, pass parent dir or use --auto.")
+    parser.add_argument("--data_dir", required=True, help="split CSV root")
     parser.add_argument("--vocab", required=True)
     parser.add_argument("--datasets", nargs="+", default=list(DATASET_CONFIGS.keys()))
-    parser.add_argument("--seeds", nargs="+", type=int, default=DEFAULT_SEEDS,
-                        help=f"List of random seeds (default: {DEFAULT_SEEDS})")
-    parser.add_argument("--auto", action="store_true",
-                        help="Auto-discover seed* subdirs (overrides --seeds)")
-    parser.add_argument("--modes", nargs="+", default=None,
-                        help="If set, treat data_dir as parent containing these subdirs (e.g. random scaffold)")
+    parser.add_argument("--seeds", nargs="+", type=int, default=DEFAULT_SEEDS, help="split seeds")
+    parser.add_argument("--auto", action="store_true", help="discover seed* subdirectories")
+    parser.add_argument("--modes", nargs="+", default=None, help="mode subdirectories under data_dir")
     parser.add_argument("--workers", type=int, default=30)
-    parser.add_argument("--skip_existing", action="store_true",
-                        help="Skip seeds whose .pt is already on disk (resume mode)")
+    parser.add_argument("--skip_existing", action="store_true", help="skip existing .pt files")
     args = parser.parse_args()
 
     load_vocab(args.vocab)
@@ -206,7 +191,6 @@ def main():
     roots = [(m, os.path.join(args.data_dir, m)) for m in args.modes] if args.modes \
             else [(None, args.data_dir)]
 
-    # Single persistent pool for the whole run — avoids 600× Pool spin-up.
     with mp.Pool(processes=args.workers) as pool:
         for tag, root in roots:
             if tag:

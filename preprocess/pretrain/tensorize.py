@@ -1,9 +1,5 @@
-"""Pretraining tensoriser: raw SMILES (one per line) -> .pt chunks.
-
-Usage:
-    python -m preprocess.pretrain.tensorize \\
-        --input data/raw/zinc250k.txt --output data/processed/zinc250k/data \\
-        --vocab data/vocab/vocab_zinc.json
+"""Pre-training tensorizer: SMILES (one per line) -> .pt chunks.
+    python -m preprocess.pretrain.tensorize --input data/raw/zinc250k.txt --output data/processed/zinc250k/data --vocab data/vocab/vocab_zinc.json
 """
 from __future__ import annotations
 
@@ -74,16 +70,15 @@ def build_dataset(smiles_txt, out_path, vocab_path, num_workers, chunk_size):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="SMILES txt file")
-    parser.add_argument("--output", required=True, help="Output .pt path")
-    parser.add_argument("--vocab", required=True, help="JT vocab JSON")
+    parser.add_argument("--input", required=True, help="SMILES text file")
+    parser.add_argument("--output", required=True, help="output .pt path prefix")
+    parser.add_argument("--vocab", required=True, help="JT vocabulary")
     parser.add_argument("--workers", type=int, default=60)
     parser.add_argument("--chunk_size", type=int, default=50000)
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    # Use fork so workers inherit the loaded vocab.
-    mp.set_start_method("fork", force=True)
+    mp.set_start_method("fork", force=True)  # workers inherit the loaded vocabulary
 
     build_dataset(args.input, args.output, args.vocab, args.workers, args.chunk_size)
 

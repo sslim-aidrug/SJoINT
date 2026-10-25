@@ -1,20 +1,5 @@
-"""MoleculeACE tensoriser: per-task activity-cliff CSVs -> .pt.
-
-Following the original protocol (van Tilborg et al. 2022), each of the 30 CHEMBL
-tasks has a single **fixed train/test split**. Per task dir: `train.csv`
-(smiles,y) and `test.csv` (smiles,y,cliff_mol). This writes `train.pt` /
-`test.pt` (FinetuneDataset format) plus `cliff_mask.pt` (per-test-molecule
-activity-cliff 0/1 flags) and a task-level `metadata.json`.
-
-The MoleculeACE benchmark is from van Tilborg et al. 2022
-(https://github.com/molML/MoleculeACE); place the raw CSVs under
-`data/raw/moleculeace/<task>/{train,test}.csv`.
-
-Usage:
-    python -m preprocess.moleculeace.tensorize \\
-        --data_dir data/raw/moleculeace \\
-        --out_dir data/processed/moleculeace \\
-        --vocab data/vocab/vocab_zinc.json --workers 30
+"""MoleculeACE tensorizer: per-task train/test CSVs -> .pt plus cliff_mask.pt.
+    python -m preprocess.moleculeace.tensorize --data_dir data/raw/moleculeace --out_dir data/processed/moleculeace --vocab data/vocab/vocab_zinc.json
 """
 from __future__ import annotations
 
@@ -29,7 +14,6 @@ import torch.multiprocessing
 
 from preprocess.core.utils import load_vocab, process_smiles, to_sample
 
-# workers return tensors; share them via files so a low open-file limit is not exhausted
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
@@ -38,7 +22,7 @@ def _sample(args):
     cpu = process_smiles(smi)
     if cpu is None:
         return None
-    return to_sample(cpu, labels=[float(y)])          # jt_features already 61-D
+    return to_sample(cpu, labels=[float(y)])
 
 
 def _read_csv(path, with_cliff=False):
@@ -61,9 +45,9 @@ def _tensorize(path, pool, with_cliff=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", required=True, help="raw CSV root: <task>/{train,test}.csv")
-    ap.add_argument("--out_dir", required=True, help="output .pt root")
-    ap.add_argument("--vocab", required=True, help="JT vocab JSON")
+    ap.add_argument("--data_dir", required=True, help="raw CSV root")
+    ap.add_argument("--out_dir", required=True, help="output root")
+    ap.add_argument("--vocab", required=True, help="JT vocabulary")
     ap.add_argument("--workers", type=int, default=30)
     args = ap.parse_args()
 

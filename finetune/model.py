@@ -1,4 +1,4 @@
-"""Downstream model: pretrained SJoINT backbone + MLP prediction head."""
+"""Fine-tuning model: pre-trained SJoINT backbone + MLP prediction head."""
 import importlib.util
 import os
 
@@ -13,17 +13,12 @@ _PRETRAIN_MODEL_PY = os.path.join(
 
 
 def _load_sjoint_class(model_py=None):
-    """Import SJoINTModel from pretrain/model.py without polluting sys.path."""
     path = model_py or _PRETRAIN_MODEL_PY
     spec = importlib.util.spec_from_file_location("pretrain_model", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod.SJoINTModel
 
-
-# --- Backbone architecture auto-detection from a checkpoint state_dict ---
-# The finetuner reconstructs the exact backbone from the ckpt alone, so any
-# valid pretrain checkpoint loads without passing its architecture by hand.
 
 def _detect_proj_dim(state_dict):
     for key in ("mol_proj.2.weight", "_orig_mod.mol_proj.2.weight"):
@@ -33,17 +28,14 @@ def _detect_proj_dim(state_dict):
 
 
 def _detect_arch(state_dict):
-    """Auto-detect hidden_dim, mol_num_layers, jt_num_layers from ckpt state_dict."""
     hidden = None
     for key in ("final_norm_mol.weight", "_orig_mod.final_norm_mol.weight"):
         if key in state_dict:
             hidden = int(state_dict[key].shape[0]); break
-    # GATv2 conv layers use convs.{i}.lin_l.weight
     mol_n_gat = sum(1 for k in state_dict if k.startswith(("mol_encoder.convs.", "_orig_mod.mol_encoder.convs."))
                     and k.endswith(".lin_l.weight"))
     jt_n_gat = sum(1 for k in state_dict if k.startswith(("jt_encoder.convs.", "_orig_mod.jt_encoder.convs."))
                    and k.endswith(".lin_l.weight"))
-    # GIN/GINE conv layers use convs.{i}.nn.* keys instead of lin_l
     mol_n_gin = len({k.split(".")[2] for k in state_dict
                      if k.startswith(("mol_encoder.convs.", "_orig_mod.mol_encoder.convs.")) and ".nn." in k})
     jt_n_gin = len({k.split(".")[2] for k in state_dict
@@ -54,7 +46,6 @@ def _detect_arch(state_dict):
 
 
 def _detect_encoder_gnn_type(state_dict, encoder_prefix):
-    """Detect GNN type ('gine'/'gatv2') for a specific encoder from ckpt keys."""
     nn_prefix = f"{encoder_prefix}.convs.0.nn."
     gat_prefix = f"{encoder_prefix}.convs.0.lin_l"
     for k in state_dict:
@@ -87,7 +78,6 @@ def _detect_jt_feature_dim(state_dict):
 
 
 def _detect_num_ca_blocks(state_dict):
-    """Count cross-attention blocks from state_dict keys."""
     idxs = set()
     for k in state_dict:
         kk = k.replace("_orig_mod.", "")
@@ -97,8 +87,7 @@ def _detect_num_ca_blocks(state_dict):
 
 
 def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1750, num_ca_blocks=3):
-    """Load a pretrained SJoINTModel from a checkpoint, reconstructing its
-    architecture from the state_dict."""
+    """Load a pre-trained backbone, inferring its architecture from the state_dict."""
     SJoINTModel = _load_sjoint_class()
 
     state = torch.load(pretrain_ckpt, map_location=device, weights_only=False)
@@ -139,14 +128,12 @@ def load_pretrained_backbone(pretrain_ckpt, device, jt_vocab_size=1750, num_ca_b
 
 def create_random_backbone(jt_vocab_size=1750, num_ca_blocks=3, device="cpu",
                            jt_feature_dim=61):
-    """Create a randomly initialised SJoINTModel (no-pretrain baseline)."""
     SJoINTModel = _load_sjoint_class()
     return SJoINTModel(jt_vocab_size=jt_vocab_size, num_ca_blocks=num_ca_blocks,
                        jt_feature_dim=jt_feature_dim).to(device)
 
 
 class ResidualBlock(nn.Module):
-    """Linear → norm → activation → dropout, with a residual when dims match."""
 
     def __init__(self, in_dim, out_dim, dropout, activation="relu", norm="layer"):
         super().__init__()
@@ -171,18 +158,7 @@ class ResidualBlock(nn.Module):
 
 
 class DownstreamModel(nn.Module):
-    """Pretrained SJoINT backbone + MLP head for property prediction.
-
-    Args:
-        pretrained_model: SJoINTModel instance (pretrained or random).
-        num_tasks: Number of output targets.
-        num_head_layers: Depth of the MLP prediction head.
-        head_hidden: Hidden dimension of the MLP head.
-        head_dropout: Dropout rate in the MLP head.
-        head_activation: Activation function ('relu', 'gelu', 'silu').
-        head_norm: Normalisation type ('layer', 'batch', 'none').
-        pool_mode: 'both' (concat JT ⊕ MOL), 'jt_only', or 'mol_only'.
-    """
+    """Backbone + MLP head; pool_mode is 'both', 'jt_only', or 'mol_only'."""
 
     def __init__(self, pretrained_model, num_tasks, *,
                  num_head_layers=2, head_hidden=32, head_dropout=0.1,
@@ -217,24 +193,22 @@ class DownstreamModel(nn.Module):
 
     @staticmethod
     def _pool(h_padded, pad_mask):
-        """Masked mean pooling: (B, N, D) → (B, D)."""
         m = pad_mask.unsqueeze(-1)
         return (h_padded * m).sum(1) / m.sum(1).clamp(min=1)
 
     def forward(self, jt_batch, mol_batch,
                 jt2mol_b, jt2mol_r, jt2mol_c,
                 mol2jt_b, mol2jt_r, mol2jt_c):
-        # Encode both views in fp32 for GATv2 stability.
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast("cuda", enabled=False):  # fp32 for GATv2 stability
             jt_h = self.jt_encoder(
                 jt_batch.vocab_ids, jt_batch.features, jt_batch.edge_index,
-                getattr(jt_batch, "edge_attr", None))          # (N_jt, H)
+                getattr(jt_batch, "edge_attr", None))
             mol_h = self.mol_encoder(
                 mol_batch.atom_ids, mol_batch.features,
-                mol_batch.edge_index, mol_batch.edge_attr)      # (N_mol, H)
+                mol_batch.edge_index, mol_batch.edge_attr)
 
-        jt_h, jt_pm = to_dense_batch(jt_h, jt_batch.batch)      # (B, max_jt, H)
-        mol_h, mol_pm = to_dense_batch(mol_h, mol_batch.batch)  # (B, max_mol, H)
+        jt_h, jt_pm = to_dense_batch(jt_h, jt_batch.batch)
+        mol_h, mol_pm = to_dense_batch(mol_h, mol_batch.batch)
         B, max_jt = jt_h.size(0), jt_h.size(1)
         max_mol = mol_h.size(1)
 
@@ -255,32 +229,25 @@ class DownstreamModel(nn.Module):
             rep = self._pool(jt_h, jt_pm)
         elif self.pool_mode == "mol_only":
             rep = self._pool(mol_h, mol_pm)
-        else:  # "both": concat JT ⊕ MOL
+        else:
             rep = torch.cat([self._pool(jt_h, jt_pm), self._pool(mol_h, mol_pm)], dim=-1)
-        return self.pred_head(rep)                              # (B, num_tasks)
+        return self.pred_head(rep)
 
 
-# The backbone submodules are copied from SJoINTModel in DownstreamModel.__init__.
-# Everything NOT under these prefixes (the prediction head) is randomly
-# initialised downstream and must be trained during Stage 1 warm-up at the full
-# head LR — not frozen at backbone_lr.
 BACKBONE_PREFIXES = (
     "mol_encoder", "jt_encoder", "blocks", "final_norm_jt", "final_norm_mol",
 )
 
 
 def is_backbone_param(name):
-    """True iff the parameter belongs to the pretrained backbone (vs. new head)."""
     return name.startswith(BACKBONE_PREFIXES)
 
 
 def freeze_backbone(model):
-    """Freeze the pretrained backbone; keep the new head trainable (Stage 1)."""
     for name, param in model.named_parameters():
         param.requires_grad = not is_backbone_param(name)
 
 
 def unfreeze_backbone(model):
-    """Enable gradients for all parameters (Stage 2)."""
     for param in model.parameters():
         param.requires_grad = True

@@ -1,11 +1,5 @@
-"""Build JT substructure vocabulary from a SMILES corpus.
-
-Output: JSON with vocab_id -> SMILES mapping (0=<PAD>, 1=<UNK>, 2+=substructures)
-        and 10-D structural descriptors per entry.
-
-Usage:
-    python -m preprocess.pretrain.build_vocab \\
-        --input data/raw/zinc250k.txt --output data/vocab/vocab_zinc.json
+"""Build the JT substructure vocabulary (0=<PAD>, 1=<UNK>) from a SMILES corpus.
+    python -m preprocess.pretrain.build_vocab --input data/raw/zinc250k.txt --output data/vocab/vocab_zinc.json
 """
 from __future__ import annotations
 

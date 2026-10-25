@@ -1,11 +1,4 @@
-"""Shared fine-tuning engine: training primitives used by both the MoleculeNet
-and MoleculeACE downstream tasks.
-
-The public entry points live in `moleculenet/train.py` and `moleculeace/train.py`;
-this module holds the task-agnostic pieces (seeding, metrics, the two-stage
-training loop, optimiser/scheduler construction, and the model factory) so the
-two tasks share one implementation.
-"""
+"""Shared fine-tuning utilities: seeding, metrics, two-stage training loop, model factory."""
 import os
 import sys
 import random
@@ -25,23 +18,13 @@ from model import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Reproducibility
-# --------------------------------------------------------------------------- #
 def _seed_worker(worker_id):
-    """Seed each DataLoader worker deterministically (best-effort reproducibility)."""
     worker_seed = torch.initial_seed() % (2 ** 32)
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 
 def seed_everything(seed, deterministic=True):
-    """Seed RNGs. With `deterministic=True` (MoleculeNet) also request
-    deterministic GPU kernels for run-to-run reproducibility — full determinism
-    is not guaranteed (GATv2/scatter atomic ops), so warn_only falls back rather
-    than erroring. With `deterministic=False` (MoleculeACE replicates / CV, where
-    only the seed needs fixing, not bit-identical kernels) keep the faster
-    non-deterministic cuDNN path."""
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
@@ -58,15 +41,12 @@ def seed_everything(seed, deterministic=True):
         pass
 
 
-# --------------------------------------------------------------------------- #
-# Metrics
-# --------------------------------------------------------------------------- #
 def _sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
 def compute_metrics(preds, labels, task_type):
-    """Compute task-appropriate metric, averaged over output dimensions."""
+    """ROC-AUC (classification) or RMSE (regression), averaged over tasks."""
     preds = np.asarray(preds)
     labels = np.asarray(labels)
 
@@ -97,7 +77,6 @@ def compute_metrics(preds, labels, task_type):
 
 
 def to_original_scale(arr, label_stats):
-    """Undo z-score normalization of regression predictions/labels."""
     if label_stats is None:
         return arr
     mean, std = label_stats
@@ -105,7 +84,6 @@ def to_original_scale(arr, label_stats):
 
 
 def _metrics_original_scale(preds, labels, label_stats, task_type):
-    """For regression, undo z-score normalization before computing RMSE."""
     if task_type == "regression":
         preds = to_original_scale(preds, label_stats)
         labels = to_original_scale(labels, label_stats)
@@ -113,8 +91,7 @@ def _metrics_original_scale(preds, labels, label_stats, task_type):
 
 
 def rmse_cliff(preds, labels, cliff_mask, label_stats=None):
-    """RMSE on the activity-cliff subset (original scale). preds/labels are the
-    normalized (or raw) 1-D arrays; label_stats un-normalizes regression."""
+    """RMSE over the activity-cliff compounds, in original units."""
     preds = np.asarray(preds).reshape(-1)
     labels = np.asarray(labels).reshape(-1)
     if label_stats is not None:
@@ -128,9 +105,6 @@ def rmse_cliff(preds, labels, cliff_mask, label_stats=None):
     return float(np.sqrt(np.mean(d ** 2))), int(mask.sum())
 
 
-# --------------------------------------------------------------------------- #
-# Batch / device
-# --------------------------------------------------------------------------- #
 _MASK_KEYS = (
     "jt2mol_b", "jt2mol_r", "jt2mol_c",
     "mol2jt_b", "mol2jt_r", "mol2jt_c",
@@ -145,12 +119,13 @@ def _to_device(batch, device):
     return jt_b, mol_b, labels, masks
 
 
-# --------------------------------------------------------------------------- #
-# Train / evaluate
-# --------------------------------------------------------------------------- #
 def train_one_epoch(model, loader, optimizer, criterion, scaler,
-                    device, task_type, grad_clip=1.0, label_stats=None):
+                    device, task_type, grad_clip=1.0, label_stats=None, freeze_bn=False):
     model.train()
+    if freeze_bn:
+        for m in model.modules():
+            if isinstance(m, nn.BatchNorm1d):
+                m.eval()
     total_loss, n_batches = 0.0, 0
     all_preds, all_labels = [], []
 
@@ -188,7 +163,7 @@ def train_one_epoch(model, loader, optimizer, criterion, scaler,
 def evaluate(model, loader, device, task_type, criterion, label_stats=None,
              return_preds=False):
     model.eval()
-    total_loss, n_labels = 0.0, 0                # loss summed over labels, not batches
+    total_loss, n_labels = 0.0, 0
     all_preds, all_labels = [], []
 
     for batch in loader:
@@ -210,21 +185,14 @@ def evaluate(model, loader, device, task_type, criterion, label_stats=None,
     preds_cat = np.concatenate(all_preds)
     labels_cat = np.concatenate(all_labels)
     metrics = _metrics_original_scale(preds_cat, labels_cat, label_stats, task_type)
-    loss = total_loss / max(n_labels, 1)        # every labelled sample weighted equally
+    loss = total_loss / max(n_labels, 1)
     if return_preds:
         return loss, metrics, preds_cat, labels_cat
     return loss, metrics
 
 
-# --------------------------------------------------------------------------- #
-# Optimiser / scheduler
-# --------------------------------------------------------------------------- #
 def build_optimizer(model, args, with_backbone):
-    """Stage 1: head only. Stage 2: backbone (low LR) + head (full LR).
-
-    The prediction head trains at the full head LR in both stages; the backbone
-    is off in Stage 1 and joins at `learning_rate * backbone_lr_ratio` in Stage 2.
-    """
+    """AdamW with the head at the full LR and the backbone at learning_rate * backbone_lr_ratio (or off)."""
     backbone = [p for n, p in model.named_parameters() if is_backbone_param(n)]
     head = [p for n, p in model.named_parameters() if not is_backbone_param(n)]
     backbone_lr = args.learning_rate * args.backbone_lr_ratio if with_backbone else 0.0
@@ -247,17 +215,10 @@ def _make_scheduler(optimizer):
         cooldown=5, min_lr=1e-6)
 
 
-# --------------------------------------------------------------------------- #
-# Two-stage training loop
-# --------------------------------------------------------------------------- #
 def run_two_stage(model, train_loader, val_loader, test_loader,
                   args, device, task_type, logger, label_stats=None):
-    """Two-stage training: backbone frozen -> unfreeze at stage1_epochs+1.
-
-    `val_loader is None` selects the full-train / no-early-stop mode (train to
-    `max_epochs`, keep the final model). Otherwise the best epoch is picked by
-    validation loss, with optional early stopping.
-    """
+    """Stage 1 trains the head only; stage 2 unfreezes the backbone. Best epoch by validation loss
+    (or the final epoch when val_loader is None)."""
     criterion = nn.BCEWithLogitsLoss() if task_type == "classification" else nn.MSELoss()
     metric = "roc_auc" if task_type == "classification" else "rmse"
 
@@ -282,16 +243,16 @@ def run_two_stage(model, train_loader, val_loader, test_loader,
 
         t_loss, t_met = train_one_epoch(
             model, train_loader, optimizer, criterion, scaler,
-            device, task_type, args.grad_clip, label_stats)
+            device, task_type, args.grad_clip, label_stats,
+            freeze_bn=getattr(args, "freeze_bn", False))
         if val_loader is not None:
             v_loss, v_met = evaluate(
                 model, val_loader, device, task_type, criterion, label_stats)
-        else:                                    # full_train: no held-out val
+        else:
             v_loss, v_met = t_loss, t_met
         if scheduler is not None:
             scheduler.step(v_loss)
 
-        # full_train (val_loader None): keep the FINAL model (train to max_epochs)
         improved = True if val_loader is None else (v_loss < best_val_loss)
         if improved:
             best_val_loss = v_loss
@@ -308,10 +269,7 @@ def run_two_stage(model, train_loader, val_loader, test_loader,
         )
 
         if val_loader is not None and es_patience > 0 and epoch > args.stage1_epochs:
-            # Measure patience from the later of (best epoch, Stage-1 end) so that
-            # a good frozen-backbone (Stage-1) checkpoint cannot instantly trip
-            # early-stop at Stage-2 start and defeat the fine-tuning stage.
-            ref_epoch = max(best_epoch, args.stage1_epochs)
+            ref_epoch = max(best_epoch, args.stage1_epochs)  # patience counted from the stage-2 start at the earliest
             if (epoch - ref_epoch) >= es_patience:
                 logger.info(
                     f"  [Early Stop] No improvement for {es_patience} epochs "
@@ -345,12 +303,8 @@ def run_two_stage(model, train_loader, val_loader, test_loader,
     }
 
 
-# --------------------------------------------------------------------------- #
-# Model factory / misc
-# --------------------------------------------------------------------------- #
 def build_model(args, task_type, num_tasks, jt_feature_dim, device, logger):
-    """Load (or randomly init, with `pretrain_ckpt="none"`) the backbone and
-    attach the prediction head."""
+    """Backbone (pre-trained, or random when pretrain_ckpt == "none") + prediction head, backbone frozen."""
     if args.pretrain_ckpt != "none":
         pretrained = load_pretrained_backbone(
             args.pretrain_ckpt, device,
@@ -372,13 +326,20 @@ def build_model(args, task_type, num_tasks, jt_feature_dim, device, logger):
         pool_mode=args.pool_mode,
     ).to(device)
     del pretrained
+    p = getattr(args, "backbone_dropout", -1.0)
+    if p >= 0:
+        for mod in (model.mol_encoder, model.jt_encoder, *model.blocks):
+            for m in mod.modules():
+                if isinstance(m, nn.Dropout):
+                    m.p = p
+            if hasattr(mod, "attn_dropout_p"):
+                mod.attn_dropout_p = p
     freeze_backbone(model)
     return model
 
 
 def normalize_regression(train_ds, *other_ds):
-    """z-score regression labels using train stats; apply to every dataset given.
-    Returns (mean, std). Caller must ensure datasets do not share sample objects."""
+    """z-score all given datasets with the training-set label statistics; returns (mean, std)."""
     label_mean, label_std = compute_label_stats(train_ds)
     for ds in (train_ds, *other_ds):
         normalize_labels(ds, label_mean, label_std)

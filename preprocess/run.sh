@@ -29,7 +29,7 @@ case "${1:-}" in
     fi
 
     echo
-    echo "=== Step 2: Tensorise ZINC SMILES → .pt chunks ==="
+    echo "=== Step 2: Tensorize ZINC SMILES → .pt chunks ==="
     $PYTHON -m preprocess.pretrain.tensorize \
         --input "$INPUT_TXT" \
         --output "$OUT_PATH" \
@@ -61,7 +61,7 @@ case "${1:-}" in
         --seeds $SEEDS
 
     echo
-    echo "=== Step 2: Tensorise CSV → .pt ==="
+    echo "=== Step 2: Tensorize CSV → .pt ==="
     if [ "$MODE" = "both" ]; then
         $PYTHON -m preprocess.moleculenet.tensorize \
             --data_dir "$OUT_DIR" \
@@ -82,7 +82,7 @@ case "${1:-}" in
     VOCAB_PATH="${VOCAB_PATH:-data/vocab/vocab_zinc.json}"
     WORKERS="${WORKERS:-30}"
 
-    echo "=== Tensorise MoleculeACE (pre-split CSVs → .pt + cliff_mask) ==="
+    echo "=== Tensorize MoleculeACE (pre-split CSVs → .pt + cliff_mask) ==="
     $PYTHON -m preprocess.moleculeace.tensorize \
         --data_dir "$DATA_DIR" \
         --out_dir "$OUT_DIR" \
