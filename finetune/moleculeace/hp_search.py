@@ -18,7 +18,7 @@ sys.path.insert(0, _HERE)
 
 from common import (                                                    # noqa: E402
     load_task, kfold_indices, label_values, _clone_subset, BackboneTemplate,
-    make_ctx, train_eval,
+    make_ctx, train_eval, HP_DEFAULTS,
 )
 from utils import seed_everything, infer_jt_feature_dim              # noqa: E402
 
@@ -27,17 +27,19 @@ _PROJECT_ROOT = os.path.dirname(_FINETUNE_DIR)
 DEFAULT_DATA_BASE = os.path.join(_PROJECT_ROOT, "data", "processed", "moleculeace")
 DEFAULT_PRETRAIN_CKPT = os.path.join(_PROJECT_ROOT, "checkpoints", "SJoINT_zinc250k_pretrained.pt")
 
-from moleculenet.configs import MOLECULEACE_SEARCH_SPACE as _SPACE                # noqa: E402
+from moleculenet.configs import SEARCH_SPACE                          # noqa: E402
 
 
 def hp_tag(hp):
-    return (f"s1e{hp['stage1_epochs']}_lr{hp['learning_rate']}_wd{hp['weight_decay']}"
-            f"_bs{hp['batch_size']}_L{hp['num_head_layers']}_h{hp['head_hidden']}"
-            f"_d{hp['head_dropout']}")
+    h = {**HP_DEFAULTS, **hp}
+    return (f"s1e{h['stage1_epochs']}_lr{h['learning_rate']}_wd{h['weight_decay']}"
+            f"_bs{h['batch_size']}_L{h['num_head_layers']}_h{h['head_hidden']}_d{h['head_dropout']}"
+            f"_blr{h['backbone_lr_ratio']}_{h['head_norm']}_{h['head_activation']}_bd{h['backbone_dropout']}"
+            f"_bn{int(h['freeze_bn'])}_po{int(h['preserve_optimizer_state'])}")
 
 
 def suggest(trial):
-    return {k: trial.suggest_categorical(k, v) for k, v in _SPACE.items()}
+    return {k: trial.suggest_categorical(k, v) for k, v in SEARCH_SPACE.items()}
 
 
 def quiet_logger():

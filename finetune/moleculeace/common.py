@@ -21,6 +21,7 @@ from dataset import (                                                 # noqa: E4
 from model import DownstreamModel, freeze_backbone                    # noqa: E402
 from utils import (                                                  # noqa: E402
     _seed_worker, run_two_stage, rmse_cliff, infer_jt_feature_dim, to_original_scale,
+    set_backbone_dropout,
 )
 from model import load_pretrained_backbone, create_random_backbone    # noqa: E402
 
@@ -78,10 +79,9 @@ class BackboneTemplate:
         return copy.deepcopy(self._template)
 
 
-_TRAIN_DEFAULTS = dict(
-    backbone_lr_ratio=0.1, grad_clip=1.0, use_amp=True,
-    preserve_optimizer_state=False, pool_mode="both",
-    head_activation="relu", head_norm="layer", save_best_ckpt=False,
+HP_DEFAULTS = dict(
+    backbone_lr_ratio=0.1, head_norm="layer", head_activation="relu",
+    backbone_dropout=-1.0, freeze_bn=False, preserve_optimizer_state=False,
 )
 
 
@@ -89,11 +89,12 @@ def _train_args(hp, max_epochs, early_stop_patience, output_dir, save_best_ckpt)
     return SimpleNamespace(
         learning_rate=hp["learning_rate"], weight_decay=hp["weight_decay"],
         batch_size=hp["batch_size"], stage1_epochs=hp["stage1_epochs"],
-        max_epochs=max_epochs, early_stop_patience=early_stop_patience,
         num_head_layers=hp["num_head_layers"], head_hidden=hp["head_hidden"],
-        head_dropout=hp["head_dropout"], output_dir=output_dir,
-        **{k: v for k, v in _TRAIN_DEFAULTS.items() if k != "save_best_ckpt"},
-        save_best_ckpt=save_best_ckpt,
+        head_dropout=hp["head_dropout"],
+        **{k: hp.get(k, v) for k, v in HP_DEFAULTS.items()},
+        max_epochs=max_epochs, early_stop_patience=early_stop_patience,
+        grad_clip=1.0, use_amp=True, pool_mode="both",
+        output_dir=output_dir, save_best_ckpt=save_best_ckpt,
     )
 
 
@@ -126,15 +127,17 @@ def train_eval(train_sub, eval_sub, hp, ctx, *, max_epochs, early_stop_patience,
             normalize_labels(test_sub, mean, std)
         label_stats = (mean, std)
 
+    args = _train_args(hp, max_epochs, early_stop_patience, output_dir, save_best_ckpt)
     bb = ctx.template.fresh().to(ctx.device)
     model = DownstreamModel(
-        bb, num_tasks, num_head_layers=hp["num_head_layers"],
-        head_hidden=hp["head_hidden"], head_dropout=hp["head_dropout"],
-        head_activation="relu", head_norm="layer", pool_mode="both").to(ctx.device)
+        bb, num_tasks, num_head_layers=args.num_head_layers,
+        head_hidden=args.head_hidden, head_dropout=args.head_dropout,
+        head_activation=args.head_activation, head_norm=args.head_norm,
+        pool_mode=args.pool_mode).to(ctx.device)
     del bb
+    set_backbone_dropout(model, args.backbone_dropout)
     freeze_backbone(model)
 
-    args = _train_args(hp, max_epochs, early_stop_patience, output_dir, save_best_ckpt)
     os.makedirs(output_dir, exist_ok=True)
 
     train_loader = _loader(train_sub.data, hp["batch_size"], num_workers,

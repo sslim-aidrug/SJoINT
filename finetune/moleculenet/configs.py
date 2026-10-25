@@ -1,4 +1,4 @@
-"""Fine-tuning hyperparameter search spaces and defaults."""
+"""Fine-tuning hyperparameter search space and defaults (MoleculeNet and MoleculeACE)."""
 
 SEARCH_SPACE = {
     "learning_rate": [1e-4, 2e-4, 5e-4, 1e-3, 5e-3, 1e-2],
@@ -14,16 +14,6 @@ SEARCH_SPACE = {
     "backbone_dropout": [-1.0, 0.0],
     "freeze_bn": [False, True],
     "preserve_optimizer_state": [False, True],
-}
-
-MOLECULEACE_SEARCH_SPACE = {
-    "learning_rate": [5e-4, 1e-3, 5e-3, 1e-2],
-    "weight_decay": [1e-5, 1e-4],
-    "batch_size": [32, 64, 128],
-    "num_head_layers": [1, 2, 3, 4],
-    "head_hidden": [32, 64, 128],
-    "head_dropout": [0.0, 0.1, 0.2, 0.3],
-    "stage1_epochs": [10, 20, 30, 40, 50],
 }
 
 DEFAULT_HP = {  # BBBP, random split

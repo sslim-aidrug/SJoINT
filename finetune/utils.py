@@ -326,16 +326,21 @@ def build_model(args, task_type, num_tasks, jt_feature_dim, device, logger):
         pool_mode=args.pool_mode,
     ).to(device)
     del pretrained
-    p = getattr(args, "backbone_dropout", -1.0)
-    if p >= 0:
-        for mod in (model.mol_encoder, model.jt_encoder, *model.blocks):
-            for m in mod.modules():
-                if isinstance(m, nn.Dropout):
-                    m.p = p
-            if hasattr(mod, "attn_dropout_p"):
-                mod.attn_dropout_p = p
+    set_backbone_dropout(model, getattr(args, "backbone_dropout", -1.0))
     freeze_backbone(model)
     return model
+
+
+def set_backbone_dropout(model, p):
+    """Override every backbone dropout with p (p < 0 keeps the pre-training values)."""
+    if p < 0:
+        return
+    for mod in (model.mol_encoder, model.jt_encoder, *model.blocks):
+        for m in mod.modules():
+            if isinstance(m, nn.Dropout):
+                m.p = p
+        if hasattr(mod, "attn_dropout_p"):
+            mod.attn_dropout_p = p
 
 
 def normalize_regression(train_ds, *other_ds):
